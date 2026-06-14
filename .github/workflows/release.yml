@@ -8,6 +8,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Needed for the package job to create the GitHub release and upload the bundle.
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   PLUGIN: fr.jourdois.pipewire.sdPlugin
