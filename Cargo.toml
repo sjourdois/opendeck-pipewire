@@ -1,0 +1,26 @@
+[package]
+name = "opendeck-pipewire"
+version = "0.1.0"
+authors = ["Stephane Jourdois <stephane@jourdois.fr>"]
+license = "GPL-3.0-or-later"
+edition = "2024"
+
+[dependencies]
+# OpenDeck / Stream Deck plugin SDK — handles the Elgato WebSocket protocol.
+openaction = "2.6"
+
+# Native PipeWire bindings. Requires system packages at build time:
+#   libpipewire-0.3-dev libspa-0.2-dev clang libclang-dev pkg-config
+pipewire = "0.8"
+
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.22"
+anyhow = "1.0"
+log = "0.4"
+simplelog = "0.12"
+
+[[bin]]
+name = "opendeck-pipewire"
+path = "src/main.rs"

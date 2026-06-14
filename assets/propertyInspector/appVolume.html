@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<script>
+			let update = () => {};
+
+			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
+				const websocket = new WebSocket("ws://localhost:" + inPort);
+				inActionInfo = JSON.parse(inActionInfo);
+				const context = inActionInfo.context;
+				const settings = inActionInfo.payload.settings;
+
+				websocket.onopen = () => {
+					websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
+				};
+
+				const app = document.getElementById("app");
+				const step = document.getElementById("step");
+				const stepValue = document.getElementById("stepValue");
+				const direction = document.getElementById("direction");
+				const up = document.getElementById("up");
+
+				step.value = settings.step ?? 5;
+				stepValue.innerText = step.value + "%";
+				up.value = String(settings.up ?? true);
+				if (inActionInfo.payload.controller == "Encoder") direction.style.display = "none";
+				step.addEventListener("input", () => { stepValue.innerText = step.value + "%"; });
+
+				update = () => {
+					websocket.send(JSON.stringify({
+						event: "setSettings",
+						context: context,
+						payload: {
+							app: app.value,
+							step: parseInt(step.value, 10),
+							up: up.value === "true",
+						},
+					}));
+				};
+
+				websocket.onmessage = (event) => {
+					const data = JSON.parse(event.data);
+					if (data.event == "sendToPropertyInspector" && data.payload && data.payload.event == "apps") {
+						const current = settings.app ?? "";
+						app.innerHTML = "";
+						// Keep the configured app even if it is not currently playing.
+						const values = new Set(data.payload.apps.map((a) => a.name));
+						if (current && !values.has(current)) data.payload.apps.unshift({ name: current });
+						const placeholder = document.createElement("option");
+						placeholder.value = "";
+						placeholder.innerText = "— select application —";
+						app.appendChild(placeholder);
+						for (const a of data.payload.apps) {
+							const option = document.createElement("option");
+							option.value = a.name;
+							option.innerText = a.name;
+							if (a.name == current) option.selected = true;
+							app.appendChild(option);
+						}
+					}
+				};
+			}
+		</script>
+		<link rel="stylesheet" href="sdpi.css" />
+	</head>
+	<body>
+		<div class="sdpi-wrapper">
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Application</div>
+				<select id="app" class="sdpi-item-value select" onchange="update()">
+					<option value="">— select application —</option>
+				</select>
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Step (<span id="stepValue">5%</span>)</div>
+				<input id="step" class="sdpi-item-value" type="range" min="1" max="20" value="5" onchange="update()" />
+			</div>
+			<div class="sdpi-item" id="direction">
+				<div class="sdpi-item-label">Direction</div>
+				<select id="up" class="sdpi-item-value select" onchange="update()">
+					<option value="true">Up</option>
+					<option value="false">Down</option>
+				</select>
+			</div>
+		</div>
+	</body>
+</html>

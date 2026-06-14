@@ -1,0 +1,110 @@
+{
+	"Name": "PipeWire Audio Control",
+	"Description": "Native (Rust) PipeWire/WirePlumber audio control for OpenDeck. No Node.js, no Wine.",
+	"Author": "Stephane Jourdois",
+	"Version": "0.1.0",
+	"CodePaths": {
+		"x86_64-unknown-linux-gnu": "x86_64-unknown-linux-gnu/bin/opendeck-pipewire",
+		"aarch64-unknown-linux-gnu": "aarch64-unknown-linux-gnu/bin/opendeck-pipewire"
+	},
+	"CodePathLin": "x86_64-unknown-linux-gnu/bin/opendeck-pipewire",
+	"Icon": "icons/plugin",
+	"Category": "PipeWire Audio",
+	"OS": [
+		{
+			"Platform": "linux"
+		}
+	],
+	"Actions": [
+		{
+			"Icon": "icons/volume",
+			"Name": "Volume",
+			"States": [{ "Image": "icons/volume" }],
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Adjust the default sink (output) volume",
+			"UUID": "fr.jourdois.pipewire.volume",
+			"PropertyInspectorPath": "propertyInspector/volume.html"
+		},
+		{
+			"Icon": "icons/mute",
+			"Name": "Mute",
+			"States": [{ "Image": "icons/mute" }, { "Image": "icons/muted" }],
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Toggle the default sink (output) mute",
+			"UUID": "fr.jourdois.pipewire.mute",
+			"PropertyInspectorPath": "propertyInspector/mute.html"
+		},
+		{
+			"Icon": "icons/output",
+			"Name": "Output Device",
+			"States": [{ "Image": "icons/output" }],
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Switch the system default output device",
+			"UUID": "fr.jourdois.pipewire.output",
+			"PropertyInspectorPath": "propertyInspector/output.html"
+		},
+		{
+			"Icon": "icons/appVolume",
+			"Name": "App Volume",
+			"States": [{ "Image": "icons/appVolume" }],
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Adjust the volume of a specific application",
+			"UUID": "fr.jourdois.pipewire.appvolume",
+			"PropertyInspectorPath": "propertyInspector/appVolume.html"
+		},
+		{
+			"Icon": "icons/volume",
+			"Name": "Device Volume",
+			"States": [{ "Image": "icons/volume" }],
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Adjust the volume of a specific output device",
+			"UUID": "fr.jourdois.pipewire.devicevolume",
+			"PropertyInspectorPath": "propertyInspector/deviceVolume.html"
+		},
+		{
+			"Icon": "icons/mic",
+			"Name": "Mic Volume",
+			"States": [{ "Image": "icons/mic" }],
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Adjust the default input (microphone) volume",
+			"UUID": "fr.jourdois.pipewire.micvolume",
+			"PropertyInspectorPath": "propertyInspector/micVolume.html"
+		},
+		{
+			"Icon": "icons/input",
+			"Name": "Input Volume",
+			"States": [{ "Image": "icons/input" }],
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Adjust the volume of a specific input device",
+			"UUID": "fr.jourdois.pipewire.inputvolume",
+			"PropertyInspectorPath": "propertyInspector/inputVolume.html"
+		},
+		{
+			"Icon": "icons/switchInput",
+			"Name": "Switch Input Device",
+			"States": [{ "Image": "icons/switchInput" }],
+			"Controllers": ["Keypad", "Encoder"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Switch the system default input device",
+			"UUID": "fr.jourdois.pipewire.switchinput",
+			"PropertyInspectorPath": "propertyInspector/switchInput.html"
+		},
+		{
+			"Icon": "icons/pushToTalk",
+			"Name": "Push to Talk",
+			"States": [{ "Image": "icons/mic" }, { "Image": "icons/micMuted" }],
+			"Controllers": ["Keypad"],
+			"SupportedInMultiActions": true,
+			"Tooltip": "Hold to unmute the microphone (push-to-talk)",
+			"UUID": "fr.jourdois.pipewire.pushtotalk",
+			"PropertyInspectorPath": "propertyInspector/pushToTalk.html"
+		}
+	]
+}

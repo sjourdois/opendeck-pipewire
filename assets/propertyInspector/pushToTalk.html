@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<script>
+			let update = () => {};
+
+			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
+				const websocket = new WebSocket("ws://localhost:" + inPort);
+				inActionInfo = JSON.parse(inActionInfo);
+				const context = inActionInfo.context;
+				const settings = inActionInfo.payload.settings;
+
+				websocket.onopen = () => {
+					websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
+				};
+
+				const inverted = document.getElementById("inverted");
+				inverted.checked = settings.inverted ?? false;
+
+				update = () => {
+					websocket.send(JSON.stringify({
+						event: "setSettings",
+						context: context,
+						payload: { inverted: inverted.checked },
+					}));
+				};
+			}
+		</script>
+		<link rel="stylesheet" href="sdpi.css" />
+	</head>
+	<body>
+		<div class="sdpi-wrapper">
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Mode</div>
+				<div class="sdpi-item-value">
+					<input id="inverted" type="checkbox" onchange="update()" />
+					<label for="inverted">Push to mute (hold to mute instead of to talk)</label>
+				</div>
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Action</div>
+				<div class="sdpi-item-value">Controls the default input (microphone) while held.</div>
+			</div>
+		</div>
+	</body>
+</html>

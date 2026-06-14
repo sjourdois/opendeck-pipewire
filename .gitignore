@@ -1,0 +1,4 @@
+/target
+# Build output bundle assembled by build.ts / CI (named after the plugin id)
+/fr.jourdois.pipewire.sdPlugin
+/*.zip

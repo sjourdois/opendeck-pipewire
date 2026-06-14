@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<script>
+			let update = () => {};
+
+			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
+				const websocket = new WebSocket("ws://localhost:" + inPort);
+				inActionInfo = JSON.parse(inActionInfo);
+				websocket.onopen = () => {
+					websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
+				};
+
+				const step = document.getElementById("step");
+				const stepValue = document.getElementById("stepValue");
+				step.value = inActionInfo.payload.settings.step ?? 5;
+				stepValue.innerText = step.value + "%";
+
+				const up = document.getElementById("up");
+				up.value = String(inActionInfo.payload.settings.up ?? true);
+
+				// The direction toggle only makes sense for a button; an encoder
+				// turns both ways already.
+				if (inActionInfo.payload.controller == "Encoder") {
+					document.getElementById("direction").style.display = "none";
+				}
+
+				step.addEventListener("input", () => { stepValue.innerText = step.value + "%"; });
+
+				update = () => {
+					websocket.send(JSON.stringify({
+						event: "setSettings",
+						context: inActionInfo.context,
+						payload: {
+							step: parseInt(step.value, 10),
+							up: up.value === "true",
+						},
+					}));
+				};
+			}
+		</script>
+		<link rel="stylesheet" href="sdpi.css" />
+	</head>
+	<body>
+		<div class="sdpi-wrapper">
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Step (<span id="stepValue">5%</span>)</div>
+				<input id="step" class="sdpi-item-value" type="range" min="1" max="20" value="5" onchange="update()" />
+			</div>
+			<div class="sdpi-item" id="direction">
+				<div class="sdpi-item-label">Direction</div>
+				<select id="up" class="sdpi-item-value select" onchange="update()">
+					<option value="true">Up</option>
+					<option value="false">Down</option>
+				</select>
+			</div>
+		</div>
+	</body>
+</html>
