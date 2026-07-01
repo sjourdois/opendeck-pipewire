@@ -1,22 +1,20 @@
-//! OpenDeck PipeWire audio control plugin — native Rust, no Node.js, no Wine.
+//! OpenDeck PipeWire audio control plugin — native Rust, no Node.js.
 //!
 //! The plugin process is launched by OpenDeck and speaks the Elgato/OpenAction
 //! WebSocket protocol via the `openaction` crate. All audio control goes through
 //! a dedicated PipeWire main-loop thread (see [`pw`]).
 
-mod app_volume;
-mod device_volume;
-mod input_volume;
-mod mic_volume;
-mod mute;
-mod output;
-mod push_to_talk;
+mod actions;
+mod color;
+mod command;
+mod display;
 mod pw;
 mod refresh;
 mod render;
-mod switch_input;
-mod volume;
 
+use actions::{
+	app_volume, device_volume, input_volume, mic_volume, output, push_to_talk, switch_input, volume,
+};
 use openaction::*;
 
 #[tokio::main]
@@ -47,16 +45,27 @@ async fn main() -> OpenActionResult<()> {
 
 	let refresher = refresh::Refresher::default();
 
-	register_action(volume::VolumeAction { pw: pw.clone() }).await;
-	register_action(mute::MuteAction { pw: pw.clone() }).await;
+	register_action(volume::VolumeAction {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})
+	.await;
 	register_action(output::OutputAction { pw: pw.clone() }).await;
-	register_action(app_volume::AppVolumeAction { pw: pw.clone() }).await;
+	register_action(app_volume::AppVolumeAction {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})
+	.await;
 	register_action(device_volume::DeviceVolumeAction {
 		pw: pw.clone(),
 		refresher: refresher.clone(),
 	})
 	.await;
-	register_action(mic_volume::MicVolumeAction { pw: pw.clone() }).await;
+	register_action(mic_volume::MicVolumeAction {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})
+	.await;
 	register_action(input_volume::InputVolumeAction {
 		pw: pw.clone(),
 		refresher: refresher.clone(),
