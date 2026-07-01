@@ -1,304 +1,20 @@
-//! Native PipeWire backend.
+//! The PipeWire main-loop thread.
 //!
-//! PipeWire's main loop is single-threaded and **not** `Send`, so everything
-//! PipeWire-related lives inside one dedicated OS thread ([`run_loop`]). Actions
-//! talk to it through a `pipewire::channel` (commands in) and a shared
-//! `Arc<Mutex<SinkSnapshot>>` (state out).
-//!
-//! Volume scale: we expose the "perceptual"/cubic scale (like `wpctl`), where
-//! the user-facing 0–100% maps to PipeWire's linear `channelVolumes` via
-//! `linear = cubic³`. See [`cubic_to_linear`] / [`linear_to_cubic`].
-//!
-//! Hardware vs software volume: sinks backed by a sound card with a hardware
-//! mixer (e.g. USB headsets) ignore node-level `channelVolumes` — WirePlumber
-//! resets them. For those we set the volume on the owning `Device`'s active
-//! `Route` instead (see [`set_device_route`] / [`Inner::apply_node`]); plain
-//! software sinks use node Props.
+//! Everything here runs on the single dedicated PipeWire thread (not `Send`):
+//! registry discovery of sink/source nodes, sound-card `Device`s and the
+//! `default` metadata; handling commands from the actions; and reading back
+//! node Props / device Route params to keep the published state current.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 
-/// State published from the PipeWire thread to the OpenDeck actions.
-#[derive(Clone, Copy, Default)]
-pub struct SinkSnapshot {
-	/// Volume on the cubic/perceptual scale (0.0..=1.0, may exceed 1.0).
-	pub volume_cubic: f32,
-	pub mute: bool,
-	/// False until we have resolved and read the default sink at least once.
-	pub known: bool,
-}
+use crate::command::Command;
 
-/// A selectable audio sink, exposed to the property inspector and used by the
-/// Device Volume action for live rendering.
-#[derive(Clone, serde::Serialize)]
-pub struct SinkDesc {
-	pub name: String,
-	pub description: String,
-	pub volume_cubic: f32,
-	pub mute: bool,
-}
-
-/// A running application producing audio, exposed to the property inspector.
-#[derive(Clone, serde::Serialize)]
-pub struct AppDesc {
-	pub name: String,
-}
-
-enum Command {
-	/// Change the default sink volume by this delta on the cubic scale.
-	AdjustVolume(f32),
-	/// Set mute on the default sink. `None` toggles.
-	SetMute(Option<bool>),
-	/// Make the sink with this `node.name` the system default output.
-	SetDefaultSink(String),
-	/// Change the volume of every stream of an app by this cubic delta.
-	AdjustAppVolume(String, f32),
-	/// Set mute on every stream of an app. `None` toggles.
-	SetAppMute(String, Option<bool>),
-	/// Change a specific sink's volume (by `node.name`) by this cubic delta.
-	AdjustSinkVolume(String, f32),
-	/// Set mute on a specific sink (by `node.name`). `None` toggles.
-	SetSinkMute(String, Option<bool>),
-
-	// --- Input / source side (microphones, capture devices) ---
-	/// Change the default source (input) volume by this cubic delta.
-	AdjustDefaultSourceVolume(f32),
-	/// Set mute on the default source. `None` toggles.
-	SetDefaultSourceMute(Option<bool>),
-	/// Change a specific source's volume (by `node.name`) by this cubic delta.
-	AdjustSourceVolume(String, f32),
-	/// Set mute on a specific source (by `node.name`). `None` toggles.
-	SetSourceMute(String, Option<bool>),
-	/// Make the source with this `node.name` the system default input.
-	SetDefaultSource(String),
-}
-
-/// Cheap, cloneable handle held by every action.
-#[derive(Clone)]
-pub struct PwHandle {
-	tx: Arc<Mutex<pipewire::channel::Sender<Command>>>,
-	state: Arc<Mutex<SinkSnapshot>>,
-	source_state: Arc<Mutex<SinkSnapshot>>,
-	sinks: Arc<Mutex<Vec<SinkDesc>>>,
-	sources: Arc<Mutex<Vec<SinkDesc>>>,
-	apps: Arc<Mutex<Vec<AppDesc>>>,
-	/// Bumped by the PipeWire thread whenever any published state changes, so the
-	/// UI can re-render on out-of-band volume/mute changes (wpctl, media keys…).
-	notify: Arc<tokio::sync::watch::Sender<u64>>,
-}
-
-impl PwHandle {
-	pub fn adjust_default_sink_volume(&self, delta_cubic: f32) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::AdjustVolume(delta_cubic));
-	}
-
-	pub fn toggle_default_sink_mute(&self) {
-		let _ = self.tx.lock().unwrap().send(Command::SetMute(None));
-	}
-
-	pub fn set_default_sink(&self, name: impl Into<String>) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::SetDefaultSink(name.into()));
-	}
-
-	pub fn adjust_app_volume(&self, app: impl Into<String>, delta_cubic: f32) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::AdjustAppVolume(app.into(), delta_cubic));
-	}
-
-	pub fn toggle_app_mute(&self, app: impl Into<String>) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::SetAppMute(app.into(), None));
-	}
-
-	/// Distinct applications currently producing audio (for the PI dropdown).
-	pub fn apps(&self) -> Vec<AppDesc> {
-		self.apps.lock().unwrap().clone()
-	}
-
-	pub fn adjust_sink_volume(&self, name: impl Into<String>, delta_cubic: f32) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::AdjustSinkVolume(name.into(), delta_cubic));
-	}
-
-	pub fn toggle_sink_mute(&self, name: impl Into<String>) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::SetSinkMute(name.into(), None));
-	}
-
-	/// Live (volume_cubic, mute) of a specific sink by `node.name`, if known.
-	pub fn sink_state(&self, name: &str) -> Option<(f32, bool)> {
-		self.sinks
-			.lock()
-			.unwrap()
-			.iter()
-			.find(|s| s.name == name)
-			.map(|s| (s.volume_cubic, s.mute))
-	}
-
-	pub fn default_sink_snapshot(&self) -> SinkSnapshot {
-		*self.state.lock().unwrap()
-	}
-
-	/// Current list of audio sinks (for the property inspector dropdown).
-	pub fn sinks(&self) -> Vec<SinkDesc> {
-		self.sinks.lock().unwrap().clone()
-	}
-
-	// --- Input / source side ---
-
-	pub fn adjust_default_source_volume(&self, delta_cubic: f32) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::AdjustDefaultSourceVolume(delta_cubic));
-	}
-
-	pub fn toggle_default_source_mute(&self) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::SetDefaultSourceMute(None));
-	}
-
-	/// Set (not toggle) the default source mute — used by Push to Talk.
-	pub fn set_default_source_mute(&self, mute: bool) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::SetDefaultSourceMute(Some(mute)));
-	}
-
-	pub fn adjust_source_volume(&self, name: impl Into<String>, delta_cubic: f32) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::AdjustSourceVolume(name.into(), delta_cubic));
-	}
-
-	pub fn toggle_source_mute(&self, name: impl Into<String>) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::SetSourceMute(name.into(), None));
-	}
-
-	pub fn set_default_source(&self, name: impl Into<String>) {
-		let _ = self
-			.tx
-			.lock()
-			.unwrap()
-			.send(Command::SetDefaultSource(name.into()));
-	}
-
-	pub fn default_source_snapshot(&self) -> SinkSnapshot {
-		*self.source_state.lock().unwrap()
-	}
-
-	pub fn source_state(&self, name: &str) -> Option<(f32, bool)> {
-		self.sources
-			.lock()
-			.unwrap()
-			.iter()
-			.find(|s| s.name == name)
-			.map(|s| (s.volume_cubic, s.mute))
-	}
-
-	/// Current list of audio sources (for the property inspector dropdown).
-	pub fn sources(&self) -> Vec<SinkDesc> {
-		self.sources.lock().unwrap().clone()
-	}
-
-	/// Subscribe to state-change notifications. `changed()` on the returned
-	/// receiver resolves whenever any sink/source volume, mute, or default
-	/// changes — including changes made outside this plugin.
-	pub fn subscribe(&self) -> tokio::sync::watch::Receiver<u64> {
-		self.notify.subscribe()
-	}
-}
-
-/// Start the PipeWire backend thread. Returns immediately.
-pub fn start() -> Result<PwHandle> {
-	let state = Arc::new(Mutex::new(SinkSnapshot::default()));
-	let source_state = Arc::new(Mutex::new(SinkSnapshot::default()));
-	let sinks = Arc::new(Mutex::new(Vec::new()));
-	let sources = Arc::new(Mutex::new(Vec::new()));
-	let apps = Arc::new(Mutex::new(Vec::new()));
-	// Drop the initial receiver; consumers get their own via `PwHandle::subscribe`.
-	let (notify_tx, _) = tokio::sync::watch::channel(0u64);
-	let notify = Arc::new(notify_tx);
-	let chans = Channels {
-		state: state.clone(),
-		source_state: source_state.clone(),
-		sinks: sinks.clone(),
-		sources: sources.clone(),
-		apps: apps.clone(),
-		notify: notify.clone(),
-	};
-
-	let (tx, rx) = pipewire::channel::channel::<Command>();
-
-	std::thread::Builder::new()
-		.name("pipewire".into())
-		.spawn(move || {
-			if let Err(error) = run_loop(rx, chans) {
-				log::error!("PipeWire loop exited: {error}");
-			}
-		})?;
-
-	Ok(PwHandle {
-		tx: Arc::new(Mutex::new(tx)),
-		state,
-		source_state,
-		sinks,
-		sources,
-		apps,
-		notify,
-	})
-}
-
-/// Shared state published from the PipeWire thread to the actions. Bundled into a
-/// struct to keep `run_loop`/`Inner` signatures small as the surface grows.
-struct Channels {
-	state: Arc<Mutex<SinkSnapshot>>,
-	source_state: Arc<Mutex<SinkSnapshot>>,
-	sinks: Arc<Mutex<Vec<SinkDesc>>>,
-	sources: Arc<Mutex<Vec<SinkDesc>>>,
-	apps: Arc<Mutex<Vec<AppDesc>>>,
-	notify: Arc<tokio::sync::watch::Sender<u64>>,
-}
-
-// ---------------------------------------------------------------------------
-// Everything below runs on the PipeWire thread only.
-// ---------------------------------------------------------------------------
+use super::pod::{set_device_route, set_node_props};
+use super::{AppDesc, Channels, SinkDesc, SinkSnapshot};
 
 /// Per-node info we track to resolve and mutate the default sink.
 struct NodeRef {
@@ -436,18 +152,31 @@ impl Inner {
 		set_node_props(&n.proxy, linear, mute);
 	}
 
-	/// Republish the list of distinct applications producing audio.
+	/// Republish the distinct applications producing audio, each with its
+	/// aggregate volume/mute: the mean of its streams' volumes, and muted only
+	/// when every stream is muted. The `BTreeMap` keeps the list name-sorted.
 	fn refresh_apps(&self) {
-		let mut names: Vec<String> = self
-			.nodes
-			.values()
-			.filter(|n| n.is_stream)
-			.filter_map(|n| n.app_name.clone())
-			.filter(|s| !s.is_empty())
+		use std::collections::BTreeMap;
+
+		let mut by_app: BTreeMap<String, (f32, u32, bool)> = BTreeMap::new();
+		for n in self.nodes.values().filter(|n| n.is_stream) {
+			let Some(app) = n.app_name.as_deref().filter(|s| !s.is_empty()) else {
+				continue;
+			};
+			let entry = by_app.entry(app.to_owned()).or_insert((0.0, 0, true));
+			entry.0 += n.volume_cubic;
+			entry.1 += 1;
+			entry.2 &= n.mute;
+		}
+		*self.chans.apps.lock().unwrap() = by_app
+			.into_iter()
+			.map(|(name, (sum, count, mute))| AppDesc {
+				name,
+				volume_cubic: sum / count as f32,
+				mute,
+			})
 			.collect();
-		names.sort();
-		names.dedup();
-		*self.chans.apps.lock().unwrap() = names.into_iter().map(|name| AppDesc { name }).collect();
+		self.bump();
 	}
 
 	fn default_sink_id(&self) -> Option<u32> {
@@ -460,6 +189,9 @@ impl Inner {
 
 	/// Recompute the published snapshots from the default sink / source state.
 	fn publish(&self) {
+		// Publish the resolved default names for the cycling pickers.
+		*self.chans.default_sink_name.lock().unwrap() = self.default_sink_name.clone();
+		*self.chans.default_source_name.lock().unwrap() = self.default_source_name.clone();
 		if let Some(id) = self.default_sink_id() {
 			let n = &self.nodes[&id];
 			*self.chans.state.lock().unwrap() = SinkSnapshot {
@@ -480,16 +212,17 @@ impl Inner {
 	}
 }
 
-fn run_loop(rx: pipewire::channel::Receiver<Command>, chans: Channels) -> Result<()> {
-	use pipewire::context::Context;
-	use pipewire::main_loop::MainLoop;
+pub(super) fn run_loop(rx: pipewire::channel::Receiver<Command>, chans: Channels) -> Result<()> {
+	use pipewire::context::ContextRc;
+	use pipewire::main_loop::MainLoopRc;
 
 	pipewire::init();
 
-	let main_loop = MainLoop::new(None)?;
-	let context = Context::new(&main_loop)?;
-	let core = context.connect(None)?;
-	let registry = Rc::new(core.get_registry()?);
+	let main_loop = MainLoopRc::new(None)?;
+	let context = ContextRc::new(&main_loop, None)?;
+	let core = context.connect_rc(None)?;
+	// A ref-counted registry so the `global` callback below can bind new objects.
+	let registry = core.get_registry_rc()?;
 
 	let inner = Rc::new(RefCell::new(Inner::new(chans)));
 
@@ -516,7 +249,7 @@ fn run_loop(rx: pipewire::channel::Receiver<Command>, chans: Channels) -> Result
 
 fn on_global(
 	inner: &Rc<RefCell<Inner>>,
-	registry: &Rc<pipewire::registry::Registry>,
+	registry: &pipewire::registry::Registry,
 	global: &pipewire::registry::GlobalObject<&pipewire::spa::utils::dict::DictRef>,
 ) {
 	use pipewire::types::ObjectType;
@@ -744,8 +477,9 @@ fn on_global(
 		_ => {}
 	}
 
-	// Fallback while metadata wiring is pending: if exactly one sink exists,
-	// treat it as default so volume/mute already work on single-output setups.
+	// Fallback while metadata wiring is pending: if exactly one sink / source
+	// exists, treat it as default so volume/mute already work on single-device
+	// setups (and Mute Mic knows the current state on the first press).
 	{
 		let mut b = inner.borrow_mut();
 		if b.default_sink_name.is_none() {
@@ -757,6 +491,17 @@ fn on_global(
 				.collect();
 			if sinks.len() == 1 {
 				b.default_sink_name = Some(sinks[0].clone());
+			}
+		}
+		if b.default_source_name.is_none() {
+			let sources: Vec<String> = b
+				.nodes
+				.values()
+				.filter(|n| n.is_source)
+				.map(|n| n.name.clone())
+				.collect();
+			if sources.len() == 1 {
+				b.default_source_name = Some(sources[0].clone());
 			}
 		}
 	}
@@ -815,14 +560,23 @@ fn on_command(inner: &Rc<RefCell<Inner>>, cmd: Command) {
 		}
 		Command::SetAppMute(app, value) => {
 			let b = inner.borrow();
-			for n in b.nodes.values().filter(|n| n.is_stream) {
-				if n.app_name
-					.as_deref()
-					.is_some_and(|a| a.eq_ignore_ascii_case(app))
-				{
-					let mute = value.unwrap_or(!n.mute);
-					set_node_props(&n.proxy, None, Some(mute));
-				}
+			let streams: Vec<&NodeRef> = b
+				.nodes
+				.values()
+				.filter(|n| n.is_stream)
+				.filter(|n| {
+					n.app_name
+						.as_deref()
+						.is_some_and(|a| a.eq_ignore_ascii_case(app))
+				})
+				.collect();
+			// Toggle the app as a whole: it counts as muted only when every stream
+			// is, so one press always flips all its streams together (keeping them
+			// in sync rather than each toggling on its own state).
+			let currently_muted = !streams.is_empty() && streams.iter().all(|n| n.mute);
+			let mute = value.unwrap_or(!currently_muted);
+			for n in streams {
+				set_node_props(&n.proxy, None, Some(mute));
 			}
 			return;
 		}
@@ -977,51 +731,8 @@ fn update_node_from_props(inner: &Rc<RefCell<Inner>>, id: u32, pod: &pipewire::s
 	let b = inner.borrow();
 	b.refresh_sinks();
 	b.refresh_sources();
+	b.refresh_apps();
 	b.publish();
-}
-
-/// Build and send a Props POD setting channelVolumes and/or mute on a node.
-fn set_node_props(node: &pipewire::node::Node, linear_volume: Option<f32>, mute: Option<bool>) {
-	use pipewire::spa::param::ParamType;
-	use pipewire::spa::pod::{
-		Object, Property, PropertyFlags, Value, ValueArray, serialize::PodSerializer,
-	};
-
-	let mut properties: Vec<Property> = Vec::new();
-	if let Some(v) = linear_volume {
-		// Apply to a stereo pair; PipeWire fans out / matches channel count.
-		properties.push(Property {
-			key: pipewire::spa::sys::SPA_PROP_channelVolumes,
-			flags: PropertyFlags::empty(),
-			value: Value::ValueArray(ValueArray::Float(vec![v, v])),
-		});
-	}
-	if let Some(m) = mute {
-		properties.push(Property {
-			key: pipewire::spa::sys::SPA_PROP_mute,
-			flags: PropertyFlags::empty(),
-			value: Value::Bool(m),
-		});
-	}
-	if properties.is_empty() {
-		return;
-	}
-
-	let object = Value::Object(Object {
-		type_: pipewire::spa::sys::SPA_TYPE_OBJECT_Props,
-		id: pipewire::spa::sys::SPA_PARAM_Props,
-		properties,
-	});
-
-	let mut bytes = Vec::new();
-	if PodSerializer::serialize(std::io::Cursor::new(&mut bytes), &object).is_err() {
-		log::warn!("Failed to serialize Props POD");
-		return;
-	}
-	match pipewire::spa::pod::Pod::from_bytes(&bytes) {
-		Some(pod) => node.set_param(ParamType::Props, 0, pod),
-		None => log::warn!("Failed to build Props POD from bytes"),
-	}
 }
 
 /// Parse a Route POD from a device and cache (index, channels) by route device.
@@ -1112,84 +823,6 @@ fn update_device_route(inner: &Rc<RefCell<Inner>>, dev_id: u32, pod: &pipewire::
 		b.refresh_sinks();
 		b.refresh_sources();
 		b.publish();
-	}
-}
-
-/// Set channelVolumes and/or mute on a device's route (hardware volume), the way
-/// `wpctl` does — required for devices with a hardware mixer (USB headsets etc.).
-fn set_device_route(
-	device: &pipewire::device::Device,
-	index: i32,
-	route_device: i32,
-	linear_volume: Option<f32>,
-	mute: Option<bool>,
-	channels: usize,
-) {
-	use pipewire::spa::param::ParamType;
-	use pipewire::spa::pod::{
-		Object, Property, PropertyFlags, Value, ValueArray, serialize::PodSerializer,
-	};
-
-	let mut props: Vec<Property> = Vec::new();
-	if let Some(v) = linear_volume {
-		props.push(Property {
-			key: pipewire::spa::sys::SPA_PROP_channelVolumes,
-			flags: PropertyFlags::empty(),
-			value: Value::ValueArray(ValueArray::Float(vec![v; channels.max(1)])),
-		});
-	}
-	if let Some(m) = mute {
-		props.push(Property {
-			key: pipewire::spa::sys::SPA_PROP_mute,
-			flags: PropertyFlags::empty(),
-			value: Value::Bool(m),
-		});
-	}
-	if props.is_empty() {
-		return;
-	}
-
-	let props_obj = Value::Object(Object {
-		type_: pipewire::spa::sys::SPA_TYPE_OBJECT_Props,
-		id: pipewire::spa::sys::SPA_PARAM_Props,
-		properties: props,
-	});
-
-	let route = Value::Object(Object {
-		type_: pipewire::spa::sys::SPA_TYPE_OBJECT_ParamRoute,
-		id: pipewire::spa::sys::SPA_PARAM_Route,
-		properties: vec![
-			Property {
-				key: pipewire::spa::sys::SPA_PARAM_ROUTE_index,
-				flags: PropertyFlags::empty(),
-				value: Value::Int(index),
-			},
-			Property {
-				key: pipewire::spa::sys::SPA_PARAM_ROUTE_device,
-				flags: PropertyFlags::empty(),
-				value: Value::Int(route_device),
-			},
-			Property {
-				key: pipewire::spa::sys::SPA_PARAM_ROUTE_props,
-				flags: PropertyFlags::empty(),
-				value: props_obj,
-			},
-			Property {
-				key: pipewire::spa::sys::SPA_PARAM_ROUTE_save,
-				flags: PropertyFlags::empty(),
-				value: Value::Bool(true),
-			},
-		],
-	});
-
-	let mut bytes = Vec::new();
-	if PodSerializer::serialize(std::io::Cursor::new(&mut bytes), &route).is_err() {
-		log::warn!("Failed to serialize Route POD");
-		return;
-	}
-	match pipewire::spa::pod::Pod::from_bytes(&bytes) {
-		Some(pod) => device.set_param(ParamType::Route, 0, pod),
-		None => log::warn!("Failed to build Route POD from bytes"),
 	}
 }
 
