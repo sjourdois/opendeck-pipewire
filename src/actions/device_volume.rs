@@ -1,4 +1,4 @@
-//! Device Volume action: controls the volume of a specific output device (sink),
+//! Output Device Volume action: controls the volume of a specific output device (sink),
 //! identified by its `node.name`. Mirrors the original plugin's "Output Volume".
 //!
 //! - Keypad: each press nudges that device's volume up/down by `step`.
@@ -9,6 +9,8 @@
 use openaction::*;
 use serde::{Deserialize, Serialize};
 
+use crate::color::BarColors;
+use crate::command::Command;
 use crate::pw::{PwHandle, SinkDesc};
 use crate::refresh::Refresher;
 
@@ -21,8 +23,11 @@ pub struct DeviceVolumeSettings {
 	pub name: String,
 	/// Step per press / tick, in percent (== original `volumeStep`).
 	pub step: u8,
-	/// For a Keypad button: direction. `true` = up, `false` = down.
-	pub up: bool,
+	/// What a Keypad press does: volume up, down, or toggle mute.
+	pub mode: super::KeyMode,
+	/// User-configurable level-bar colours (unmuted / muted).
+	#[serde(flatten)]
+	pub colors: BarColors,
 }
 
 impl Default for DeviceVolumeSettings {
@@ -31,7 +36,8 @@ impl Default for DeviceVolumeSettings {
 			sink: None,
 			name: String::new(),
 			step: 5,
-			up: true,
+			mode: super::KeyMode::Up,
+			colors: BarColors::default(),
 		}
 	}
 }
@@ -42,12 +48,20 @@ struct SinksMessage {
 	sinks: Vec<SinkDesc>,
 }
 
-/// The key label: the custom name, else the sink's `node.name`, else "Device".
-pub fn label(settings: &DeviceVolumeSettings) -> String {
-	if settings.name.is_empty() {
-		settings.sink.clone().unwrap_or_else(|| "Device".to_owned())
-	} else {
-		settings.name.clone()
+/// The key label: the custom name if set, else the sink's friendly description
+/// (never the raw `node.name`), else "Device".
+pub fn label(settings: &DeviceVolumeSettings, pw: &PwHandle) -> String {
+	if !settings.name.is_empty() {
+		return settings.name.clone();
+	}
+	match settings.sink.as_deref() {
+		Some(name) => pw
+			.sinks()
+			.into_iter()
+			.find(|s| s.name == name)
+			.map(|s| s.description)
+			.unwrap_or_else(|| name.to_owned()),
+		None => "Device".to_owned(),
 	}
 }
 
@@ -58,7 +72,7 @@ pub struct DeviceVolumeAction {
 
 #[async_trait]
 impl Action for DeviceVolumeAction {
-	const UUID: &'static str = "fr.jourdois.pipewire.devicevolume";
+	const UUID: &'static str = super::action_uuid!("devicevolume");
 	type Settings = DeviceVolumeSettings;
 
 	async fn key_down(
@@ -66,9 +80,12 @@ impl Action for DeviceVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		let step = settings.step.clamp(1, 20) as f32 / 100.0;
-		let delta = if settings.up { step } else { -step };
-		self.adjust(instance, settings, delta).await
+		let step = super::step_fraction(settings.step);
+		match settings.mode {
+			super::KeyMode::Up => self.adjust(instance, settings, step).await,
+			super::KeyMode::Down => self.adjust(instance, settings, -step).await,
+			super::KeyMode::Mute => self.toggle_mute(instance, settings).await,
+		}
 	}
 
 	async fn dial_rotate(
@@ -78,7 +95,7 @@ impl Action for DeviceVolumeAction {
 		ticks: i16,
 		_pressed: bool,
 	) -> OpenActionResult<()> {
-		let step = settings.step.clamp(1, 20) as f32 / 100.0;
+		let step = super::step_fraction(settings.step);
 		self.adjust(instance, settings, ticks as f32 * step).await
 	}
 
@@ -87,12 +104,17 @@ impl Action for DeviceVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		if let Some(sink) = settings.sink.as_deref().filter(|s| !s.is_empty()) {
-			self.pw.toggle_sink_mute(sink);
-			let (vol, mute) = self.pw.sink_state(sink).unwrap_or((0.0, false));
-			return self.render(instance, settings, vol, !mute).await;
-		}
-		Ok(())
+		self.toggle_mute(instance, settings).await
+	}
+
+	async fn touch_tap(
+		&self,
+		instance: &Instance,
+		settings: &Self::Settings,
+		_position: (u16, u16),
+		_hold: bool,
+	) -> OpenActionResult<()> {
+		self.toggle_mute(instance, settings).await
 	}
 
 	async fn will_appear(
@@ -156,12 +178,33 @@ impl DeviceVolumeAction {
 		let Some(sink) = settings.sink.as_deref().filter(|s| !s.is_empty()) else {
 			return Ok(());
 		};
-		self.pw.adjust_sink_volume(sink, delta_cubic);
+		let (cur, mute) = self.pw.sink_state(sink).unwrap_or((0.0, false));
+		// Adjusting the volume of a muted device unmutes it.
+		if mute {
+			self.pw
+				.send(Command::SetSinkMute(sink.to_owned(), Some(false)));
+		}
+		self.pw
+			.send(Command::AdjustSinkVolume(sink.to_owned(), delta_cubic));
 		// Optimistic render so the bar updates instantly (the real Props event
 		// will reconcile a moment later).
-		let (cur, mute) = self.pw.sink_state(sink).unwrap_or((0.0, false));
 		let next = (cur + delta_cubic).clamp(0.0, 1.5);
-		self.render(instance, settings, next, mute).await
+		self.render(instance, settings, next, false).await
+	}
+
+	async fn toggle_mute(
+		&self,
+		instance: &Instance,
+		settings: &DeviceVolumeSettings,
+	) -> OpenActionResult<()> {
+		if let Some(sink) = settings.sink.as_deref().filter(|s| !s.is_empty()) {
+			self.pw.send(Command::SetSinkMute(sink.to_owned(), None));
+			// The command is applied asynchronously, so render the flipped state
+			// optimistically (the Props event will reconcile a moment later).
+			let (vol, mute) = self.pw.sink_state(sink).unwrap_or((0.0, false));
+			return self.render(instance, settings, vol, !mute).await;
+		}
+		Ok(())
 	}
 
 	async fn render(
@@ -171,15 +214,14 @@ impl DeviceVolumeAction {
 		volume_cubic: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
-		instance
-			.set_image(
-				Some(crate::render::device_key(
-					&label(settings),
-					volume_cubic,
-					mute,
-				)),
-				None,
-			)
-			.await
+		crate::display::device(
+			instance,
+			&label(settings, &self.pw),
+			&settings.name,
+			volume_cubic,
+			mute,
+			&settings.colors,
+		)
+		.await
 	}
 }
