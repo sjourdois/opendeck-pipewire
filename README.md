@@ -4,7 +4,7 @@
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 
 Native **Rust** PipeWire / WirePlumber audio control plugin for
-[OpenDeck](https://github.com/nekename/OpenDeck) — **no Node.js, no Wine**.
+[OpenDeck](https://github.com/nekename/OpenDeck) — **no Node.js**.
 
 It is a plain Rust binary launched directly by OpenDeck, speaking the OpenAction /
 Elgato Stream Deck WebSocket protocol through the
@@ -16,19 +16,43 @@ Inspired by the Node.js plugin
 reimplemented natively in Rust.
 
 > This repository is the **source**. The installable plugin id is
-> `fr.jourdois.pipewire.sdPlugin` (reverse-DNS, the Stream Deck convention) — the
-> repo name and the plugin id are independent, and the `.sdPlugin` bundle is a
+> `fr.jourdois.pipewire.sdPlugin`, and the `.sdPlugin` bundle is a
 > build artifact assembled from `assets/` + the compiled binaries.
 
 ## Features
 
 | Action | Controllers | What it does |
 |--------|-------------|--------------|
-| **Volume** | Keypad · Encoder | Adjust the default output (sink) volume; dial press = mute; live %-bar key image |
-| **Mute** | Keypad · Encoder | Toggle the default output mute (2-state icon) |
-| **Output Device** | Keypad · Encoder | Switch the system default output device |
-| **App Volume** | Keypad · Encoder | Adjust the volume of a specific application (Firefox, Spotify, …) |
-| **Device Volume** | Keypad · Encoder | Adjust the volume of a specific named output device |
+| **Output Volume** | Keypad · Encoder | Adjust the default output (sink) volume; live %-bar key image |
+| **Output Device Volume** | Keypad · Encoder | Adjust the volume of a specific named output device |
+| **Output App Volume** | Keypad · Encoder | Adjust the volume of a specific application (Firefox, Spotify, …) |
+| **Output Device** | Keypad · Encoder | Switch the system default output; pick several devices to cycle through them |
+| **Input Volume** | Keypad · Encoder | Adjust the default input (mic/source) volume |
+| **Input Device Volume** | Keypad · Encoder | Adjust the volume of a specific named input device |
+| **Input Device** | Keypad · Encoder | Switch the system default input; pick several devices to cycle through them |
+| **Push to Talk** | Keypad | Hold to talk (unmute the mic while held); optional push-to-mute |
+
+Each **volume action** has an *On press* mode — **Volume up**, **Volume down**, or
+**Toggle mute** — so a single action covers raising, lowering, and muting its target
+(the default sink/source, a specific device, or an application). There is no separate
+mute action: a mute button is just a volume action set to *Toggle mute*. On an
+encoder the dial always rotates for volume and presses to mute, regardless of mode.
+
+The **App Volume** key/dial shows a live level bar for the chosen application,
+aggregated across its streams.
+
+Every volume action's **bar colours** (unmuted and muted) are configurable in the
+property inspector. When muted, a keypad key gets a bold diagonal slash in the mute
+colour; on a Stream Deck+ touchstrip (which can't draw the slash) the value and bar
+turn the mute colour instead.
+
+On a **Stream Deck+**, the volume actions render an icon, a live percentage and a
+level bar on the touchstrip (via `setFeedback`), and every encoder action responds
+to dial rotation, dial press and touch.
+
+Keys re-render **live** when a device's volume or mute changes outside the plugin
+(wpctl, pavucontrol, media keys, another app…), reflected through a PipeWire watch
+channel.
 
 Volume changes are applied on the **device Route** for sinks with a hardware
 mixer (USB headsets such as the Astro A50) and on the **node Props** for software
@@ -40,7 +64,8 @@ sinks — chosen automatically, including across live hardware-profile switches.
 ## Requirements
 
 - A running **PipeWire** + **WirePlumber** session.
-- **OpenDeck** ≥ the version that supports native plugins.
+- **OpenDeck ≥ 2.13.1** — for the Stream Deck+ encoder touchstrip feedback. Earlier
+  releases still run the keypad actions, but not the dial feedback.
 
 ## Install
 
@@ -57,6 +82,13 @@ sinks — chosen automatically, including across live hardware-profile switches.
    ```
    e.g. the binary at `x86_64-unknown-linux-gnu/bin/opendeck-pipewire`.
 3. Copy that directory into `~/.config/opendeck/plugins/` and restart OpenDeck.
+
+> **Updating an installed plugin:** OpenDeck snapshots each action's definition
+> into your profile when you place it, and re-reads it only when the plugin
+> **version** changes. After updating the plugin, bump the version (this repo does
+> so per release) and **re-create (delete and re-add) any already-placed buttons**
+> so they pick up the new icons, states, and settings — a restart alone won't
+> refresh existing buttons.
 
 ## Build from source
 
@@ -84,47 +116,6 @@ push.
 
 Runtime PipeWire tools (`wpctl`, `pw-dump`, `pactl`) are **not** used by the
 plugin — audio control is fully native — but are handy for debugging.
-
-## How it works
-
-- `src/pw.rs` runs a dedicated PipeWire main-loop thread (the loop is not `Send`),
-  tracking sink nodes, application streams, the `default` metadata, and audio
-  `Device` objects with their routes. Actions talk to it through a
-  `pipewire::channel` (commands) and shared state (live volumes / device lists).
-- Volume is exposed on the cubic/perceptual scale (like `wpctl`); the mapping to
-  PipeWire's linear `channelVolumes` is `linear = cubic³`.
-- Live key images (volume bars, app labels) are generated as SVG data URIs and
-  sent via `set_image`.
-
-## Parity with the plugin it replaces
-
-`com.sfgrimes.pipewire-audio` (the Node.js plugin) exposes 8 actions. **Full
-functional parity is reached** (plus a dedicated Mute action as a bonus):
-
-| Original action | Status here |
-|-----------------|-------------|
-| Master Volume | ✅ Volume |
-| App Volume | ✅ App Volume |
-| Output Volume | ✅ Device Volume |
-| Switch Output Device | ✅ Output Device |
-| Mic Volume | ✅ Mic Volume |
-| Input Volume | ✅ Input Volume |
-| Switch Input Device | ✅ Switch Input Device |
-| Push to Talk | ✅ Push to Talk |
-| — | ➕ Mute (default sink) |
-
-## Roadmap to a publishable 1.0
-
-- [x] **Source/input actions** for functional parity (Mic Volume, Input Volume,
-      Switch Input Device, Push to Talk).
-- [x] **`LICENSE`** (GPL-3.0-or-later).
-- [x] **CI / packaging** workflow producing the `.sdPlugin` bundle for `x86_64` and
-      `aarch64` Linux.
-- [ ] Designed **icons** (current ones are simple built-in SVGs).
-- [ ] Live volume bar on the **App Volume** key (per-stream volume read-back).
-- [ ] **Distribution**: submit to the OpenDeck plugin store / OpenAction plugins
-      registry, or host a release for manual install.
-- [ ] Testing across more hardware (different cards, multi-channel routes).
 
 ## License
 
