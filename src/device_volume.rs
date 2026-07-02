@@ -10,6 +10,7 @@ use openaction::*;
 use serde::{Deserialize, Serialize};
 
 use crate::pw::{PwHandle, SinkDesc};
+use crate::refresh::Refresher;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -41,8 +42,18 @@ struct SinksMessage {
 	sinks: Vec<SinkDesc>,
 }
 
+/// The key label: the custom name, else the sink's `node.name`, else "Device".
+pub fn label(settings: &DeviceVolumeSettings) -> String {
+	if settings.name.is_empty() {
+		settings.sink.clone().unwrap_or_else(|| "Device".to_owned())
+	} else {
+		settings.name.clone()
+	}
+}
+
 pub struct DeviceVolumeAction {
 	pub pw: PwHandle,
+	pub refresher: Refresher,
 }
 
 #[async_trait]
@@ -89,8 +100,18 @@ impl Action for DeviceVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		self.refresher.set_device(&instance.instance_id, settings);
 		let (vol, mute) = self.state(settings);
 		self.render(instance, settings, vol, mute).await
+	}
+
+	async fn will_disappear(
+		&self,
+		instance: &Instance,
+		_settings: &Self::Settings,
+	) -> OpenActionResult<()> {
+		self.refresher.forget_device(&instance.instance_id);
+		Ok(())
 	}
 
 	async fn did_receive_settings(
@@ -98,6 +119,7 @@ impl Action for DeviceVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		self.refresher.set_device(&instance.instance_id, settings);
 		let (vol, mute) = self.state(settings);
 		self.render(instance, settings, vol, mute).await
 	}
@@ -149,14 +171,13 @@ impl DeviceVolumeAction {
 		volume_cubic: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
-		let label = if settings.name.is_empty() {
-			settings.sink.clone().unwrap_or_else(|| "Device".to_owned())
-		} else {
-			settings.name.clone()
-		};
 		instance
 			.set_image(
-				Some(crate::render::device_key(&label, volume_cubic, mute)),
+				Some(crate::render::device_key(
+					&label(settings),
+					volume_cubic,
+					mute,
+				)),
 				None,
 			)
 			.await

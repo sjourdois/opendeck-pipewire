@@ -5,6 +5,7 @@ use openaction::*;
 use serde::{Deserialize, Serialize};
 
 use crate::pw::{PwHandle, SinkDesc};
+use crate::refresh::Refresher;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -36,8 +37,21 @@ struct SourcesMessage {
 	sources: Vec<SinkDesc>,
 }
 
+/// The key label: the custom name, else the source's `node.name`, else "Input".
+pub fn label(settings: &InputVolumeSettings) -> String {
+	if settings.name.is_empty() {
+		settings
+			.source
+			.clone()
+			.unwrap_or_else(|| "Input".to_owned())
+	} else {
+		settings.name.clone()
+	}
+}
+
 pub struct InputVolumeAction {
 	pub pw: PwHandle,
+	pub refresher: Refresher,
 }
 
 #[async_trait]
@@ -84,8 +98,18 @@ impl Action for InputVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		self.refresher.set_input(&instance.instance_id, settings);
 		let (vol, mute) = self.state(settings);
 		self.render(instance, settings, vol, mute).await
+	}
+
+	async fn will_disappear(
+		&self,
+		instance: &Instance,
+		_settings: &Self::Settings,
+	) -> OpenActionResult<()> {
+		self.refresher.forget_input(&instance.instance_id);
+		Ok(())
 	}
 
 	async fn did_receive_settings(
@@ -93,6 +117,7 @@ impl Action for InputVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		self.refresher.set_input(&instance.instance_id, settings);
 		let (vol, mute) = self.state(settings);
 		self.render(instance, settings, vol, mute).await
 	}
@@ -142,17 +167,13 @@ impl InputVolumeAction {
 		volume_cubic: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
-		let label = if settings.name.is_empty() {
-			settings
-				.source
-				.clone()
-				.unwrap_or_else(|| "Input".to_owned())
-		} else {
-			settings.name.clone()
-		};
 		instance
 			.set_image(
-				Some(crate::render::device_key(&label, volume_cubic, mute)),
+				Some(crate::render::device_key(
+					&label(settings),
+					volume_cubic,
+					mute,
+				)),
 				None,
 			)
 			.await

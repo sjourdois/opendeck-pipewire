@@ -2,7 +2,7 @@
 	"Name": "PipeWire Audio Control",
 	"Description": "Native (Rust) PipeWire/WirePlumber audio control for OpenDeck. No Node.js, no Wine.",
 	"Author": "Stephane Jourdois",
-	"Version": "0.1.0",
+	"Version": "0.1.1",
 	"CodePaths": {
 		"x86_64-unknown-linux-gnu": "x86_64-unknown-linux-gnu/bin/opendeck-pipewire",
 		"aarch64-unknown-linux-gnu": "aarch64-unknown-linux-gnu/bin/opendeck-pipewire"

@@ -12,6 +12,7 @@ mod mute;
 mod output;
 mod push_to_talk;
 mod pw;
+mod refresh;
 mod render;
 mod switch_input;
 mod volume;
@@ -44,15 +45,42 @@ async fn main() -> OpenActionResult<()> {
 		}
 	};
 
+	let refresher = refresh::Refresher::default();
+
 	register_action(volume::VolumeAction { pw: pw.clone() }).await;
 	register_action(mute::MuteAction { pw: pw.clone() }).await;
 	register_action(output::OutputAction { pw: pw.clone() }).await;
 	register_action(app_volume::AppVolumeAction { pw: pw.clone() }).await;
-	register_action(device_volume::DeviceVolumeAction { pw: pw.clone() }).await;
+	register_action(device_volume::DeviceVolumeAction {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})
+	.await;
 	register_action(mic_volume::MicVolumeAction { pw: pw.clone() }).await;
-	register_action(input_volume::InputVolumeAction { pw: pw.clone() }).await;
+	register_action(input_volume::InputVolumeAction {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})
+	.await;
 	register_action(switch_input::SwitchInputAction { pw: pw.clone() }).await;
 	register_action(push_to_talk::PushToTalkAction { pw: pw.clone() }).await;
+
+	// Re-render visible keys whenever PipeWire state changes out-of-band (volume
+	// changed by wpctl, media keys, another app…). The PipeWire thread signals
+	// changes on the watch channel; we coalesce bursts and redraw once each.
+	{
+		let pw = pw.clone();
+		let refresher = refresher.clone();
+		tokio::spawn(async move {
+			let mut changes = pw.subscribe();
+			loop {
+				refresh::refresh_all(&pw, &refresher).await;
+				if changes.changed().await.is_err() {
+					break;
+				}
+			}
+		});
+	}
 
 	run(std::env::args().collect()).await
 }

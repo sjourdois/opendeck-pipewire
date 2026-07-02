@@ -86,6 +86,9 @@ pub struct PwHandle {
 	sinks: Arc<Mutex<Vec<SinkDesc>>>,
 	sources: Arc<Mutex<Vec<SinkDesc>>>,
 	apps: Arc<Mutex<Vec<AppDesc>>>,
+	/// Bumped by the PipeWire thread whenever any published state changes, so the
+	/// UI can re-render on out-of-band volume/mute changes (wpctl, media keys…).
+	notify: Arc<tokio::sync::watch::Sender<u64>>,
 }
 
 impl PwHandle {
@@ -233,6 +236,13 @@ impl PwHandle {
 	pub fn sources(&self) -> Vec<SinkDesc> {
 		self.sources.lock().unwrap().clone()
 	}
+
+	/// Subscribe to state-change notifications. `changed()` on the returned
+	/// receiver resolves whenever any sink/source volume, mute, or default
+	/// changes — including changes made outside this plugin.
+	pub fn subscribe(&self) -> tokio::sync::watch::Receiver<u64> {
+		self.notify.subscribe()
+	}
 }
 
 /// Start the PipeWire backend thread. Returns immediately.
@@ -242,12 +252,16 @@ pub fn start() -> Result<PwHandle> {
 	let sinks = Arc::new(Mutex::new(Vec::new()));
 	let sources = Arc::new(Mutex::new(Vec::new()));
 	let apps = Arc::new(Mutex::new(Vec::new()));
+	// Drop the initial receiver; consumers get their own via `PwHandle::subscribe`.
+	let (notify_tx, _) = tokio::sync::watch::channel(0u64);
+	let notify = Arc::new(notify_tx);
 	let chans = Channels {
 		state: state.clone(),
 		source_state: source_state.clone(),
 		sinks: sinks.clone(),
 		sources: sources.clone(),
 		apps: apps.clone(),
+		notify: notify.clone(),
 	};
 
 	let (tx, rx) = pipewire::channel::channel::<Command>();
@@ -267,6 +281,7 @@ pub fn start() -> Result<PwHandle> {
 		sinks,
 		sources,
 		apps,
+		notify,
 	})
 }
 
@@ -278,6 +293,7 @@ struct Channels {
 	sinks: Arc<Mutex<Vec<SinkDesc>>>,
 	sources: Arc<Mutex<Vec<SinkDesc>>>,
 	apps: Arc<Mutex<Vec<AppDesc>>>,
+	notify: Arc<tokio::sync::watch::Sender<u64>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -345,8 +361,9 @@ impl Inner {
 	}
 
 	/// Build the (sorted, live volume/mute) descriptor list for sinks or sources.
-	/// A node's Props mirror its hardware route, so this reflects the real volume
-	/// even for route-controlled (USB) devices.
+	/// Node `volume_cubic`/`mute` are kept current from node Props (software sinks)
+	/// and from the owning device's Route params (route-controlled USB devices, see
+	/// [`update_device_route`]), so this reflects the real volume for both.
 	fn node_descs(&self, want_sink: bool) -> Vec<SinkDesc> {
 		let mut list: Vec<SinkDesc> = self
 			.nodes
@@ -367,12 +384,19 @@ impl Inner {
 		list
 	}
 
+	/// Wake any UI subscribers so they can re-render from the latest state.
+	fn bump(&self) {
+		self.chans.notify.send_modify(|v| *v = v.wrapping_add(1));
+	}
+
 	fn refresh_sinks(&self) {
 		*self.chans.sinks.lock().unwrap() = self.node_descs(true);
+		self.bump();
 	}
 
 	fn refresh_sources(&self) {
 		*self.chans.sources.lock().unwrap() = self.node_descs(false);
+		self.bump();
 	}
 
 	fn sink_id_by_name(&self, name: &str) -> Option<u32> {
@@ -452,6 +476,7 @@ impl Inner {
 				known: true,
 			};
 		}
+		self.bump();
 	}
 }
 
@@ -1012,6 +1037,8 @@ fn update_device_route(inner: &Rc<RefCell<Inner>>, dev_id: u32, pod: &pipewire::
 	let mut index: Option<i32> = None;
 	let mut route_device: Option<i32> = None;
 	let mut channels: usize = 2;
+	let mut linear_avg: Option<f32> = None;
+	let mut mute: Option<bool> = None;
 	for prop in obj.properties {
 		match prop.key {
 			pipewire::spa::sys::SPA_PARAM_ROUTE_index => {
@@ -1027,11 +1054,21 @@ fn update_device_route(inner: &Rc<RefCell<Inner>>, dev_id: u32, pod: &pipewire::
 			pipewire::spa::sys::SPA_PARAM_ROUTE_props => {
 				if let Value::Object(p) = prop.value {
 					for pp in p.properties {
-						if pp.key == pipewire::spa::sys::SPA_PROP_channelVolumes
-							&& let Value::ValueArray(ValueArray::Float(v)) = pp.value
-							&& !v.is_empty()
-						{
-							channels = v.len();
+						match pp.key {
+							pipewire::spa::sys::SPA_PROP_channelVolumes => {
+								if let Value::ValueArray(ValueArray::Float(v)) = pp.value
+									&& !v.is_empty()
+								{
+									channels = v.len();
+									linear_avg = Some(v.iter().sum::<f32>() / v.len() as f32);
+								}
+							}
+							pipewire::spa::sys::SPA_PROP_mute => {
+								if let Value::Bool(m) = pp.value {
+									mute = Some(m);
+								}
+							}
+							_ => {}
 						}
 					}
 				}
@@ -1040,11 +1077,41 @@ fn update_device_route(inner: &Rc<RefCell<Inner>>, dev_id: u32, pod: &pipewire::
 		}
 	}
 
-	if let (Some(index), Some(route_device)) = (index, route_device)
-		&& let Some(dev) = inner.borrow_mut().devices.get_mut(&dev_id)
-	{
-		dev.routes
-			.insert(route_device, RouteInfo { index, channels });
+	let (Some(index), Some(route_device)) = (index, route_device) else {
+		return;
+	};
+
+	let mut b = inner.borrow_mut();
+	let Some(dev) = b.devices.get_mut(&dev_id) else {
+		return;
+	};
+	dev.routes
+		.insert(route_device, RouteInfo { index, channels });
+
+	// Propagate an externally-changed hardware volume/mute (wpctl, pavucontrol,
+	// media keys…) to the node(s) sitting on this route. Route-controlled devices
+	// don't reliably mirror the route into their node Props, so without this the
+	// plugin would never see out-of-band changes to a hardware device's volume.
+	let mut changed = false;
+	for n in b.nodes.values_mut() {
+		if n.device_id == Some(dev_id) && n.route_device == Some(route_device) {
+			if let Some(l) = linear_avg {
+				n.volume_cubic = linear_to_cubic(l);
+				changed = true;
+			}
+			if let Some(m) = mute {
+				n.mute = m;
+				changed = true;
+			}
+		}
+	}
+	drop(b);
+
+	if changed {
+		let b = inner.borrow();
+		b.refresh_sinks();
+		b.refresh_sources();
+		b.publish();
 	}
 }
 
