@@ -611,3 +611,109 @@ select {
 	-webkit-appearance: media-slider;
 	text-overflow: ellipsis;
 }
+
+.action-title {
+	margin: 2px 4px 2px;
+	font-size: 11pt;
+	font-weight: 600;
+	color: #d8d8d8;
+}
+
+.action-desc {
+	margin: 0 4px 12px;
+	font-size: 9pt;
+	color: #969696;
+}
+
+.dev-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 4px;
+	margin: 2px 4px;
+	background: #2d2d2d;
+	border-radius: 4px;
+}
+
+.dev-row .dev-name {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 9pt;
+}
+
+.dev-row .dev-order {
+	color: #969696;
+	font-size: 8pt;
+	min-width: 14px;
+	text-align: right;
+}
+
+.dev-row button {
+	width: 26px;
+	height: 24px;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	background: #4a4a4a;
+	color: #ffffff;
+	cursor: pointer;
+	line-height: 1;
+}
+
+.dev-row button:hover {
+	background: #5a5a5a;
+}
+
+.dev-row button:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
+.dev-empty {
+	margin: 2px 4px;
+	padding: 6px 4px;
+	font-size: 9pt;
+	color: #969696;
+	font-style: italic;
+}
+
+/* A native checkbox + optional caption + text field on one row (used for the
+   "use the device name as label" toggle). Overrides sdpi's hidden-checkbox rules. */
+.label-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+}
+
+.label-row input[type="checkbox"] {
+	display: inline-block !important;
+	-webkit-appearance: checkbox !important;
+	appearance: checkbox !important;
+	width: 15px !important;
+	height: 15px !important;
+	min-width: 15px;
+	margin: 0;
+	flex: 0 0 auto;
+	cursor: pointer;
+}
+
+.label-row .cap {
+	font-size: 9pt;
+	color: #d8d8d8;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.label-row input[type="text"] {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.label-row input[type="text"]:disabled {
+	opacity: 0.5;
+	color: #969696;
+	cursor: default;
+}

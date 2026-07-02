@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
+		<meta charset="utf-8" />
 		<script>
 			let update = () => {};
 
@@ -14,14 +15,14 @@
 					websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
 				};
 
-				const inverted = document.getElementById("inverted");
-				inverted.checked = settings.inverted ?? false;
+				const mode = document.getElementById("mode");
+				mode.value = (settings.inverted ?? false) ? "mute" : "talk";
 
 				update = () => {
 					websocket.send(JSON.stringify({
 						event: "setSettings",
 						context: context,
-						payload: { inverted: inverted.checked },
+						payload: { inverted: mode.value === "mute" },
 					}));
 				};
 			}
@@ -30,16 +31,14 @@
 	</head>
 	<body>
 		<div class="sdpi-wrapper">
+			<div class="action-title">Push to Talk</div>
+			<div class="action-desc">Control the default microphone while the key is held — hold to talk (unmute), or push to mute.</div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Mode</div>
-				<div class="sdpi-item-value">
-					<input id="inverted" type="checkbox" onchange="update()" />
-					<label for="inverted">Push to mute (hold to mute instead of to talk)</label>
-				</div>
-			</div>
-			<div class="sdpi-item">
-				<div class="sdpi-item-label">Action</div>
-				<div class="sdpi-item-value">Controls the default input (microphone) while held.</div>
+				<select id="mode" class="sdpi-item-value select" onchange="update()">
+					<option value="talk">Push to talk (hold to unmute)</option>
+					<option value="mute">Push to mute (hold to mute)</option>
+				</select>
 			</div>
 		</div>
 	</body>

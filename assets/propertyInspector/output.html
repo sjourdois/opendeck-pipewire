@@ -1,44 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
+		<meta charset="utf-8" />
 		<script>
-			let update = () => {};
-
 			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
 				const websocket = new WebSocket("ws://localhost:" + inPort);
 				inActionInfo = JSON.parse(inActionInfo);
 				const context = inActionInfo.context;
-				const selected = inActionInfo.payload.settings.sink ?? "";
+				let order = (inActionInfo.payload.settings.sinks ?? []).slice();
+				let descs = {};
+				let available = [];
 
 				websocket.onopen = () => {
 					websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
 				};
 
-				const sink = document.getElementById("sink");
+				const list = document.getElementById("list");
+				const add = document.getElementById("add");
 
-				update = () => {
+				const save = () => {
 					websocket.send(JSON.stringify({
 						event: "setSettings",
 						context: context,
-						payload: { sink: sink.value },
+						payload: { sinks: order },
 					}));
 				};
+
+				const swap = (i, j) => { [order[i], order[j]] = [order[j], order[i]]; save(); render(); };
+
+				const render = () => {
+					list.innerHTML = "";
+					if (order.length === 0) {
+						const empty = document.createElement("div");
+						empty.className = "dev-empty";
+						empty.textContent = "No devices yet — add one below.";
+						list.appendChild(empty);
+					}
+					order.forEach((name, i) => {
+						const row = document.createElement("div");
+						row.className = "dev-row";
+
+						const num = document.createElement("span");
+						num.className = "dev-order";
+						num.textContent = i + 1 + ".";
+						row.appendChild(num);
+
+						const label = document.createElement("span");
+						label.className = "dev-name";
+						label.textContent = descs[name] ?? name;
+						row.appendChild(label);
+
+						const up = document.createElement("button");
+						up.textContent = "▲";
+						up.title = "Move up";
+						up.disabled = i === 0;
+						up.addEventListener("click", () => swap(i, i - 1));
+						row.appendChild(up);
+
+						const down = document.createElement("button");
+						down.textContent = "▼";
+						down.title = "Move down";
+						down.disabled = i === order.length - 1;
+						down.addEventListener("click", () => swap(i, i + 1));
+						row.appendChild(down);
+
+						const del = document.createElement("button");
+						del.textContent = "✕";
+						del.title = "Remove";
+						del.addEventListener("click", () => { order.splice(i, 1); save(); render(); });
+						row.appendChild(del);
+
+						list.appendChild(row);
+					});
+
+					// The add dropdown offers the devices not already in the list.
+					add.innerHTML = "";
+					add.appendChild(new Option("— add a device —", ""));
+					for (const s of available) {
+						if (!order.includes(s.name)) add.appendChild(new Option(s.description, s.name));
+					}
+				};
+
+				add.addEventListener("change", () => {
+					const name = add.value;
+					if (name && !order.includes(name)) { order.push(name); save(); }
+					render();
+				});
+				render();
 
 				websocket.onmessage = (event) => {
 					const data = JSON.parse(event.data);
 					if (data.event == "sendToPropertyInspector" && data.payload && data.payload.event == "sinks") {
-						sink.innerHTML = "";
-						const placeholder = document.createElement("option");
-						placeholder.value = "";
-						placeholder.innerText = "— select output —";
-						sink.appendChild(placeholder);
-						for (const s of data.payload.sinks) {
-							const option = document.createElement("option");
-							option.value = s.name;
-							option.innerText = s.description;
-							if (s.name == selected) option.selected = true;
-							sink.appendChild(option);
-						}
+						available = data.payload.sinks;
+						descs = {};
+						for (const s of available) descs[s.name] = s.description;
+						render();
 					}
 				};
 			}
@@ -47,10 +103,13 @@
 	</head>
 	<body>
 		<div class="sdpi-wrapper">
+			<div class="action-title">Output Device</div>
+			<div class="action-desc">Switch the system default output. Add several devices to cycle through them in order — each press selects the next.</div>
+			<div id="list"></div>
 			<div class="sdpi-item">
-				<div class="sdpi-item-label">Output</div>
-				<select id="sink" class="sdpi-item-value select" onchange="update()">
-					<option value="">— select output —</option>
+				<div class="sdpi-item-label">Add device</div>
+				<select id="add" class="sdpi-item-value select">
+					<option value="">— add a device —</option>
 				</select>
 			</div>
 		</div>

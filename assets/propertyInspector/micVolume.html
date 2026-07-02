@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
+		<meta charset="utf-8" />
 		<script>
 			let update = () => {};
+			let syncStep = () => {};
 
 			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
 				const websocket = new WebSocket("ws://localhost:" + inPort);
@@ -16,18 +18,33 @@
 
 				const step = document.getElementById("step");
 				const stepValue = document.getElementById("stepValue");
-				const up = document.getElementById("up");
+				const mode = document.getElementById("mode");
+				const unmute = document.getElementById("unmute");
+				const mute = document.getElementById("mute");
 				step.value = settings.step ?? 5;
 				stepValue.innerText = step.value + "%";
-				up.value = String(settings.up ?? true);
-				if (inActionInfo.payload.controller == "Encoder") document.getElementById("direction").style.display = "none";
+				mode.value = settings.mode ?? "up";
+				unmute.value = settings.unmute_color ?? "#3db36b";
+				mute.value = settings.mute_color ?? "#ff3b30";
+
+				const isKeypad = inActionInfo.payload.controller != "Encoder";
+				if (!isKeypad) document.getElementById("direction").style.display = "none";
+				const stepRow = document.getElementById("stepRow");
+				syncStep = () => { stepRow.style.display = (isKeypad && mode.value == "mute") ? "none" : ""; };
+				syncStep();
+
 				step.addEventListener("input", () => { stepValue.innerText = step.value + "%"; });
 
 				update = () => {
 					websocket.send(JSON.stringify({
 						event: "setSettings",
 						context: context,
-						payload: { step: parseInt(step.value, 10), up: up.value === "true" },
+						payload: {
+							step: parseInt(step.value, 10),
+							mode: mode.value,
+							unmute_color: unmute.value,
+							mute_color: mute.value,
+						},
 					}));
 				};
 			}
@@ -36,16 +53,27 @@
 	</head>
 	<body>
 		<div class="sdpi-wrapper">
-			<div class="sdpi-item">
+			<div class="action-title">Input Volume</div>
+			<div class="action-desc">Adjust the default input (microphone) volume. On a keypad, choose whether a press raises, lowers, or mutes; an encoder rotates for volume and presses to mute.</div>
+			<div class="sdpi-item" id="direction">
+				<div class="sdpi-item-label">On press</div>
+				<select id="mode" class="sdpi-item-value select" onchange="update(); syncStep()">
+					<option value="up">Volume up</option>
+					<option value="down">Volume down</option>
+					<option value="mute">Toggle mute</option>
+				</select>
+			</div>
+			<div class="sdpi-item" id="stepRow">
 				<div class="sdpi-item-label">Step (<span id="stepValue">5%</span>)</div>
 				<input id="step" class="sdpi-item-value" type="range" min="1" max="20" value="5" onchange="update()" />
 			</div>
-			<div class="sdpi-item" id="direction">
-				<div class="sdpi-item-label">Direction</div>
-				<select id="up" class="sdpi-item-value select" onchange="update()">
-					<option value="true">Up</option>
-					<option value="false">Down</option>
-				</select>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Bar color</div>
+				<input id="unmute" class="sdpi-item-value" type="color" value="#3db36b" onchange="update()" />
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Muted color</div>
+				<input id="mute" class="sdpi-item-value" type="color" value="#ff3b30" onchange="update()" />
 			</div>
 		</div>
 	</body>

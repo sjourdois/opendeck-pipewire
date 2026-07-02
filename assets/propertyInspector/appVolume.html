@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
+		<meta charset="utf-8" />
 		<script>
 			let update = () => {};
+			let syncStep = () => {};
 
 			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
 				const websocket = new WebSocket("ws://localhost:" + inPort);
@@ -18,12 +20,22 @@
 				const step = document.getElementById("step");
 				const stepValue = document.getElementById("stepValue");
 				const direction = document.getElementById("direction");
-				const up = document.getElementById("up");
+				const mode = document.getElementById("mode");
+				const unmute = document.getElementById("unmute");
+				const mute = document.getElementById("mute");
 
 				step.value = settings.step ?? 5;
 				stepValue.innerText = step.value + "%";
-				up.value = String(settings.up ?? true);
-				if (inActionInfo.payload.controller == "Encoder") direction.style.display = "none";
+				mode.value = settings.mode ?? "up";
+				unmute.value = settings.unmute_color ?? "#3db36b";
+				mute.value = settings.mute_color ?? "#ff3b30";
+
+				const isKeypad = inActionInfo.payload.controller != "Encoder";
+				if (!isKeypad) direction.style.display = "none";
+				const stepRow = document.getElementById("stepRow");
+				syncStep = () => { stepRow.style.display = (isKeypad && mode.value == "mute") ? "none" : ""; };
+				syncStep();
+
 				step.addEventListener("input", () => { stepValue.innerText = step.value + "%"; });
 
 				update = () => {
@@ -33,30 +45,45 @@
 						payload: {
 							app: app.value,
 							step: parseInt(step.value, 10),
-							up: up.value === "true",
+							mode: mode.value,
+							unmute_color: unmute.value,
+							mute_color: mute.value,
 						},
 					}));
 				};
 
+				const warning = document.getElementById("warning");
+				let current = settings.app ?? "";
+				const renderApps = (apps, loaded) => {
+					// Preserve the user's live pick across re-renders (the list can be
+					// re-delivered), falling back to the saved setting on first load.
+					current = app.value || current;
+					app.innerHTML = "";
+					app.appendChild(new Option("— select application —", ""));
+					let found = false;
+					for (const a of apps) {
+						const option = new Option(a.name, a.name);
+						if (a.name == current) {
+							option.selected = true;
+							found = true;
+						}
+						app.appendChild(option);
+					}
+					// Keep the saved app shown even before the list arrives, or if it
+					// isn't currently playing; warn once the list has actually loaded.
+					if (current && !found) {
+						const option = new Option(current, current);
+						option.selected = true;
+						app.appendChild(option);
+					}
+					warning.style.display = loaded && current && !found ? "" : "none";
+				};
+				renderApps([], false);
+
 				websocket.onmessage = (event) => {
 					const data = JSON.parse(event.data);
 					if (data.event == "sendToPropertyInspector" && data.payload && data.payload.event == "apps") {
-						const current = settings.app ?? "";
-						app.innerHTML = "";
-						// Keep the configured app even if it is not currently playing.
-						const values = new Set(data.payload.apps.map((a) => a.name));
-						if (current && !values.has(current)) data.payload.apps.unshift({ name: current });
-						const placeholder = document.createElement("option");
-						placeholder.value = "";
-						placeholder.innerText = "— select application —";
-						app.appendChild(placeholder);
-						for (const a of data.payload.apps) {
-							const option = document.createElement("option");
-							option.value = a.name;
-							option.innerText = a.name;
-							if (a.name == current) option.selected = true;
-							app.appendChild(option);
-						}
+						renderApps(data.payload.apps, true);
 					}
 				};
 			}
@@ -65,22 +92,36 @@
 	</head>
 	<body>
 		<div class="sdpi-wrapper">
+			<div class="action-title">Output App Volume</div>
+			<div class="action-desc">Adjust a specific application's volume (aggregated across its streams). On a keypad, choose whether a press raises, lowers, or mutes; an encoder rotates for volume and presses to mute.</div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Application</div>
 				<select id="app" class="sdpi-item-value select" onchange="update()">
 					<option value="">— select application —</option>
 				</select>
 			</div>
-			<div class="sdpi-item">
+			<div id="warning" style="display: none; margin: -4px 0 8px; color: #f7821b; font-size: 9pt">
+				⚠ The saved application isn't currently running.
+			</div>
+			<div class="sdpi-item" id="direction">
+				<div class="sdpi-item-label">On press</div>
+				<select id="mode" class="sdpi-item-value select" onchange="update(); syncStep()">
+					<option value="up">Volume up</option>
+					<option value="down">Volume down</option>
+					<option value="mute">Toggle mute</option>
+				</select>
+			</div>
+			<div class="sdpi-item" id="stepRow">
 				<div class="sdpi-item-label">Step (<span id="stepValue">5%</span>)</div>
 				<input id="step" class="sdpi-item-value" type="range" min="1" max="20" value="5" onchange="update()" />
 			</div>
-			<div class="sdpi-item" id="direction">
-				<div class="sdpi-item-label">Direction</div>
-				<select id="up" class="sdpi-item-value select" onchange="update()">
-					<option value="true">Up</option>
-					<option value="false">Down</option>
-				</select>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Bar color</div>
+				<input id="unmute" class="sdpi-item-value" type="color" value="#3db36b" onchange="update()" />
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Muted color</div>
+				<input id="mute" class="sdpi-item-value" type="color" value="#ff3b30" onchange="update()" />
 			</div>
 		</div>
 	</body>
