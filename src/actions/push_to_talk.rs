@@ -4,6 +4,7 @@
 use openaction::*;
 use serde::{Deserialize, Serialize};
 
+use crate::command::Command;
 use crate::pw::PwHandle;
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -24,7 +25,7 @@ fn state_for(mute: bool) -> u16 {
 
 #[async_trait]
 impl Action for PushToTalkAction {
-	const UUID: &'static str = "fr.jourdois.pipewire.pushtotalk";
+	const UUID: &'static str = super::action_uuid!("pushtotalk");
 	type Settings = PushToTalkSettings;
 
 	async fn key_down(
@@ -34,23 +35,26 @@ impl Action for PushToTalkAction {
 	) -> OpenActionResult<()> {
 		// Held: talk (unmute), or push-to-mute (mute) when inverted.
 		let mute = settings.inverted;
-		self.pw.set_default_source_mute(mute);
+		self.pw.send(Command::SetDefaultSourceMute(Some(mute)));
 		instance.set_state(state_for(mute)).await
 	}
 
 	async fn key_up(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
 		// Released: back to the resting state (muted for talk, open for mute).
 		let mute = !settings.inverted;
-		self.pw.set_default_source_mute(mute);
+		self.pw.send(Command::SetDefaultSourceMute(Some(mute)));
 		instance.set_state(state_for(mute)).await
 	}
 
 	async fn will_appear(
 		&self,
 		instance: &Instance,
-		settings: &Self::Settings,
+		_settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		// Reflect the resting state visually without forcing the mic.
-		instance.set_state(state_for(!settings.inverted)).await
+		// Reflect the mic's actual state; don't presume it is muted before the key
+		// has been used (the mic may still be open).
+		instance
+			.set_state(state_for(self.pw.default_source_snapshot().mute))
+			.await
 	}
 }
