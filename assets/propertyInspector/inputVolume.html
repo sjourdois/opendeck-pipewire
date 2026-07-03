@@ -57,7 +57,10 @@
 						context: context,
 						payload: {
 							source: source.value,
-							name: useName.checked ? "" : name.value,
+							// Use the tracked custom label, not the live field: when
+							// "Device name" is unchecked the field still momentarily
+							// shows the (disabled) device description.
+							name: useName.checked ? "" : customName,
 							step: parseInt(step.value, 10),
 							mode: mode.value,
 							unmute_color: unmute.value,
