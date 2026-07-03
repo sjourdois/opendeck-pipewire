@@ -3,10 +3,11 @@
 //! A **Keypad** button is fully plugin-drawn (an SVG key image, or a 2-state
 //! icon). On an **Encoder** (Stream Deck+ dial) the volume actions push the
 //! value + level bar of the `$B1` layout via `setFeedback` (see [`crate::render`]);
-//! the icon stays the dial's own OpenDeck configuration, and the title is the
-//! action's custom label when set, else OpenDeck's own title. Mute is a
-//! `set_state`, and the device pickers set a default title. See the
-//! `encoder-feedback-model` notes.
+//! the icon stays the dial's own OpenDeck configuration. The device/app volume
+//! actions also push their resolved label as the title (so the dial names its
+//! target, as the keypad image does); the default sink/mic actions leave the
+//! title to OpenDeck. Mute is a `set_state`, and the device pickers set a default
+//! title. See the `encoder-feedback-model` notes.
 //!
 //! Actions and the out-of-band [`crate::refresh`] task share one path per action.
 
@@ -32,9 +33,9 @@ async fn bar(
 	keypad: impl FnOnce() -> String,
 ) -> OpenActionResult<()> {
 	if is_encoder(instance) {
-		// The touchstrip shows the dial's own OpenDeck icon; we only push the
-		// live value + level bar. `title` is the action's custom label (empty →
-		// OpenDeck seeds the user's title).
+		// The touchstrip shows the dial's own OpenDeck icon; we push the live
+		// value + level bar and the `title` (the resolved surface label — custom
+		// label or device name — mirroring what the keypad draws in its image).
 		instance
 			.set_feedback(&render::bar_feedback(
 				title,
@@ -79,33 +80,33 @@ pub async fn mic(
 	.await
 }
 
-/// A specific output device's volume. `label` is the keypad text; `name` is the
-/// user's custom label, shown as the encoder title (empty → OpenDeck's title).
+/// A specific output device's volume. `label` is the resolved surface text — the
+/// user's custom label, else the device's friendly name — shown both as the keypad
+/// image text and as the encoder title.
 pub async fn device(
 	instance: &Instance,
 	label: &str,
-	name: &str,
 	vol: f32,
 	muted: bool,
 	colors: &BarColors,
 ) -> OpenActionResult<()> {
-	bar(instance, name, true, vol, muted, colors, || {
+	bar(instance, label, true, vol, muted, colors, || {
 		render::label_bar_key(label, vol, muted, colors)
 	})
 	.await
 }
 
-/// A specific input device's volume. `label` is the keypad text; `name` is the
-/// user's custom label, shown as the encoder title (empty → OpenDeck's title).
+/// A specific input device's volume. `label` is the resolved surface text — the
+/// user's custom label, else the device's friendly name — shown both as the keypad
+/// image text and as the encoder title.
 pub async fn input(
 	instance: &Instance,
 	label: &str,
-	name: &str,
 	vol: f32,
 	muted: bool,
 	colors: &BarColors,
 ) -> OpenActionResult<()> {
-	bar(instance, name, true, vol, muted, colors, || {
+	bar(instance, label, true, vol, muted, colors, || {
 		render::label_bar_key(label, vol, muted, colors)
 	})
 	.await

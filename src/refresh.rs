@@ -140,7 +140,6 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		let _ = display::device(
 			&inst,
 			&device_volume::label(settings, pw),
-			&settings.name,
 			vol,
 			mute,
 			&settings.colors,
@@ -162,7 +161,6 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		let _ = display::input(
 			&inst,
 			&input_volume::label(settings, pw),
-			&settings.name,
 			vol,
 			mute,
 			&settings.colors,

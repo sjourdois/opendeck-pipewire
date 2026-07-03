@@ -217,7 +217,6 @@ impl DeviceVolumeAction {
 		crate::display::device(
 			instance,
 			&label(settings, &self.pw),
-			&settings.name,
 			volume_cubic,
 			mute,
 			&settings.colors,

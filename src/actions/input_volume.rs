@@ -211,7 +211,6 @@ impl InputVolumeAction {
 		crate::display::input(
 			instance,
 			&label(settings, &self.pw),
-			&settings.name,
 			volume_cubic,
 			mute,
 			&settings.colors,

@@ -80,9 +80,9 @@ fn escape(s: &str) -> String {
 // --- Encoder touchstrip feedback (Stream Deck+) ------------------------------
 
 /// `setFeedback` for the `$B1` volume layout: the "NN%"/"muted" `value` and the
-/// level `indicator` bar. A non-empty `title` (the action's custom label) is sent
-/// too; otherwise the title — and the icon — are left to OpenDeck. `known == false`
-/// renders a "—".
+/// level `indicator` bar. A non-empty `title` (the surface label — a device/app
+/// name or the user's custom label) is sent too; otherwise the title — and the
+/// icon — are left to OpenDeck. `known == false` renders a "—".
 ///
 /// The layout can't draw the keypad's mute slash, so mute turns the value text and
 /// the bar to the mute colour instead — the strongest cue it allows. `setFeedback`
