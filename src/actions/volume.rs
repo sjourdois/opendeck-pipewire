@@ -19,6 +19,8 @@ pub struct VolumeSettings {
 	pub step: u8,
 	/// What a Keypad press does: volume up, down, or toggle mute.
 	pub mode: super::KeyMode,
+	/// Custom key title. `None` = "Output".
+	pub title: Option<String>,
 	/// User-configurable level-bar colours (unmuted / muted).
 	#[serde(flatten)]
 	pub colors: BarColors,
@@ -29,8 +31,26 @@ impl Default for VolumeSettings {
 		Self {
 			step: 5,
 			mode: super::KeyMode::Up,
+			title: None,
 			colors: BarColors::default(),
 		}
+	}
+}
+
+/// The key title: the custom title if set, else the current default output
+/// device's description (falling back to "Output" when there is no default).
+pub fn resolve_title(custom: &Option<String>, pw: &PwHandle) -> String {
+	match custom {
+		Some(t) => t.clone(),
+		None => match pw.default_sink_name() {
+			Some(n) => pw
+				.sinks()
+				.into_iter()
+				.find(|s| s.name == n)
+				.map(|s| s.description)
+				.unwrap_or(n),
+			None => "Output".to_owned(),
+		},
 	}
 }
 
@@ -95,7 +115,10 @@ impl Action for VolumeAction {
 	) -> OpenActionResult<()> {
 		self.refresher
 			.set_colors(&instance.instance_id, &settings.colors);
-		self.refresh(instance, settings).await
+		self.refresher
+			.set_default_title(&instance.instance_id, settings.title.clone());
+		self.refresh(instance, settings).await?;
+		crate::display::title(instance, &resolve_title(&settings.title, &self.pw)).await
 	}
 
 	async fn will_disappear(
@@ -104,6 +127,7 @@ impl Action for VolumeAction {
 		_settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.forget_colors(&instance.instance_id);
+		self.refresher.forget_default_title(&instance.instance_id);
 		Ok(())
 	}
 
@@ -114,7 +138,10 @@ impl Action for VolumeAction {
 	) -> OpenActionResult<()> {
 		self.refresher
 			.set_colors(&instance.instance_id, &settings.colors);
-		self.refresh(instance, settings).await
+		self.refresher
+			.set_default_title(&instance.instance_id, settings.title.clone());
+		self.refresh(instance, settings).await?;
+		crate::display::title(instance, &resolve_title(&settings.title, &self.pw)).await
 	}
 }
 

@@ -16,6 +16,19 @@ fn data_uri(svg: &str) -> String {
 	format!("data:image/svg+xml;base64,{b64}")
 }
 
+/// The Output Device key icon (normal) as a data URI. Set explicitly (rather than
+/// via a manifest state) so the picker can stay a single state — switching states
+/// would reset the user's per-state title font/position.
+pub fn output_icon() -> String {
+	data_uri(include_str!("../assets/icons/output.svg"))
+}
+
+/// The greyed Output Device icon, shown when the key is inactive (the default
+/// output isn't one of the chosen sinks and `when_inactive == Disable`).
+pub fn output_disabled_icon() -> String {
+	data_uri(include_str!("../assets/icons/outputDisabled.svg"))
+}
+
 /// A bold slash drawn corner-to-corner across the whole key to signal mute, in
 /// the configured mute colour. Overlaid last (on top of the label/bar) by the
 /// keypad renderers when muted; empty when unmuted.

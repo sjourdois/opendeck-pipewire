@@ -2,12 +2,26 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
+		<style>
+			.icon-btn {
+				width: 28px;
+				height: 28px;
+				padding: 0;
+				flex: 0 0 auto;
+				background-size: cover;
+				background-position: center;
+				background-repeat: no-repeat;
+			}
+		</style>
 		<script>
 			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
 				const websocket = new WebSocket("ws://localhost:" + inPort);
 				inActionInfo = JSON.parse(inActionInfo);
 				const context = inActionInfo.context;
-				let order = (inActionInfo.payload.settings.sinks ?? []).slice();
+				const settings = inActionInfo.payload.settings;
+				let order = (settings.sinks ?? []).slice();
+				let icons = Object.assign({}, settings.icons ?? {});
+				let inactiveIcon = (typeof settings.inactive_icon === "string") ? settings.inactive_icon : null;
 				let descs = {};
 				let available = [];
 
@@ -18,12 +32,75 @@
 				const list = document.getElementById("list");
 				const add = document.getElementById("add");
 
+				const useCurrent = document.getElementById("useCurrent");
+				const titleInput = document.getElementById("title");
+				const savedTitle = settings.title;
+				let customTitle = (typeof savedTitle === "string") ? savedTitle : "";
+				// Checked (no saved string) = show the current default output; unchecked
+				// = use the custom title verbatim, even when it is empty (blank title).
+				useCurrent.checked = typeof savedTitle !== "string";
+				const syncTitle = () => {
+					titleInput.disabled = useCurrent.checked;
+					titleInput.value = useCurrent.checked ? "" : customTitle;
+				};
+				titleInput.addEventListener("input", () => { customTitle = titleInput.value; save(); });
+				useCurrent.addEventListener("change", () => { syncTitle(); save(); });
+
 				const save = () => {
+					const wi = document.querySelector('input[name="when_inactive"]:checked');
 					websocket.send(JSON.stringify({
 						event: "setSettings",
 						context: context,
-						payload: { sinks: order },
+						payload: {
+							sinks: order,
+							when_inactive: wi ? wi.value : "cycle",
+							title: useCurrent.checked ? null : customTitle,
+							icons: icons,
+							inactive_icon: inactiveIcon,
+						},
 					}));
+				};
+				syncTitle();
+
+				const wiValue = settings.when_inactive ?? "cycle";
+				for (const r of document.querySelectorAll('input[name="when_inactive"]')) {
+					r.checked = r.value === wiValue;
+					r.addEventListener("change", save);
+				}
+
+				// Open a file picker and hand the chosen image back as a data URI.
+				const pickIcon = (cb) => {
+					const inp = document.createElement("input");
+					inp.type = "file";
+					inp.accept = "image/*";
+					inp.addEventListener("change", () => {
+						const f = inp.files && inp.files[0];
+						if (!f) return;
+						const r = new FileReader();
+						r.onload = () => cb(r.result);
+						r.readAsDataURL(f);
+					});
+					inp.click();
+				};
+
+				// A [thumbnail-or-placeholder] pick button, plus a clear button when set.
+				const iconControls = (getUri, setUri, onDone) => {
+					const uri = getUri();
+					const btn = document.createElement("button");
+					btn.className = "icon-btn";
+					btn.title = uri ? "Change icon" : "Set icon";
+					if (uri) btn.style.backgroundImage = `url("${uri}")`;
+					else btn.textContent = "🖼";
+					btn.addEventListener("click", () => pickIcon((u) => { setUri(u); save(); onDone(); }));
+					const els = [btn];
+					if (uri) {
+						const clr = document.createElement("button");
+						clr.textContent = "⌫";
+						clr.title = "Remove icon";
+						clr.addEventListener("click", () => { setUri(null); save(); onDone(); });
+						els.push(clr);
+					}
+					return els;
 				};
 
 				const swap = (i, j) => { [order[i], order[j]] = [order[j], order[i]]; save(); render(); };
@@ -44,6 +121,12 @@
 						num.className = "dev-order";
 						num.textContent = i + 1 + ".";
 						row.appendChild(num);
+
+						for (const el of iconControls(
+							() => icons[name] ?? null,
+							(u) => { if (u) icons[name] = u; else delete icons[name]; },
+							render,
+						)) row.appendChild(el);
 
 						const label = document.createElement("span");
 						label.className = "dev-name";
@@ -67,7 +150,7 @@
 						const del = document.createElement("button");
 						del.textContent = "✕";
 						del.title = "Remove";
-						del.addEventListener("click", () => { order.splice(i, 1); save(); render(); });
+						del.addEventListener("click", () => { order.splice(i, 1); delete icons[name]; save(); render(); });
 						row.appendChild(del);
 
 						list.appendChild(row);
@@ -81,12 +164,23 @@
 					}
 				};
 
+				const renderInactive = () => {
+					const box = document.getElementById("inactiveIcon");
+					box.innerHTML = "";
+					for (const el of iconControls(
+						() => inactiveIcon,
+						(u) => { inactiveIcon = u; },
+						renderInactive,
+					)) box.appendChild(el);
+				};
+
 				add.addEventListener("change", () => {
 					const name = add.value;
 					if (name && !order.includes(name)) { order.push(name); save(); }
 					render();
 				});
 				render();
+				renderInactive();
 
 				websocket.onmessage = (event) => {
 					const data = JSON.parse(event.data);
@@ -104,13 +198,38 @@
 	<body>
 		<div class="sdpi-wrapper">
 			<div class="action-title">Output Device</div>
-			<div class="action-desc">Switch the system default output. Add several devices to cycle through them in order — each press selects the next.</div>
+			<div class="action-desc">Switch the system default output. Add several devices to cycle through them in order — each press selects the next. Give each device an icon to show which output is active.</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Title</div>
+				<div class="sdpi-item-value label-row">
+					<input id="useCurrent" type="checkbox" />
+					<label for="useCurrent" class="cap">Current device</label>
+					<input id="title" type="text" placeholder="Custom title" />
+				</div>
+			</div>
 			<div id="list"></div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Add device</div>
 				<select id="add" class="sdpi-item-value select">
 					<option value="">— add a device —</option>
 				</select>
+			</div>
+			<div type="radio" class="sdpi-item">
+				<div class="sdpi-item-label">When another device is active</div>
+				<div class="sdpi-item-value">
+					<span class="sdpi-item-child">
+						<input id="wi_cycle" type="radio" name="when_inactive" value="cycle" />
+						<label for="wi_cycle"><span></span>Cycle into the list on press</label>
+					</span>
+					<span class="sdpi-item-child">
+						<input id="wi_disable" type="radio" name="when_inactive" value="disable" />
+						<label for="wi_disable"><span></span>Disable (grey out the key)</label>
+					</span>
+				</div>
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Icon when inactive</div>
+				<div class="sdpi-item-value label-row" id="inactiveIcon"></div>
 			</div>
 		</div>
 	</body>

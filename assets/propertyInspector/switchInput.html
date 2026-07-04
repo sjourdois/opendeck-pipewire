@@ -17,14 +17,28 @@
 
 				const list = document.getElementById("list");
 				const add = document.getElementById("add");
+				const useCurrent = document.getElementById("useCurrent");
+				const titleInput = document.getElementById("title");
+				const savedTitle = inActionInfo.payload.settings.title;
+				let customTitle = (typeof savedTitle === "string") ? savedTitle : "";
+				// Checked (no saved string) = show the current default input; unchecked
+				// = use the custom title verbatim, even when it is empty (blank title).
+				useCurrent.checked = typeof savedTitle !== "string";
+				const syncTitle = () => {
+					titleInput.disabled = useCurrent.checked;
+					titleInput.value = useCurrent.checked ? "" : customTitle;
+				};
+				titleInput.addEventListener("input", () => { customTitle = titleInput.value; save(); });
+				useCurrent.addEventListener("change", () => { syncTitle(); save(); });
 
 				const save = () => {
 					websocket.send(JSON.stringify({
 						event: "setSettings",
 						context: context,
-						payload: { sources: order },
+						payload: { sources: order, title: useCurrent.checked ? null : customTitle },
 					}));
 				};
+				syncTitle();
 
 				const swap = (i, j) => { [order[i], order[j]] = [order[j], order[i]]; save(); render(); };
 
@@ -105,6 +119,14 @@
 		<div class="sdpi-wrapper">
 			<div class="action-title">Input Device</div>
 			<div class="action-desc">Switch the system default input. Add several devices to cycle through them in order — each press selects the next.</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Title</div>
+				<div class="sdpi-item-value label-row">
+					<input id="useCurrent" type="checkbox" />
+					<label for="useCurrent" class="cap">Current device</label>
+					<input id="title" type="text" placeholder="Custom title" />
+				</div>
+			</div>
 			<div id="list"></div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Add device</div>

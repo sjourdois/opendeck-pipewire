@@ -50,7 +50,11 @@ async fn main() -> OpenActionResult<()> {
 		refresher: refresher.clone(),
 	})
 	.await;
-	register_action(output::OutputAction { pw: pw.clone() }).await;
+	register_action(output::OutputAction {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})
+	.await;
 	register_action(app_volume::AppVolumeAction {
 		pw: pw.clone(),
 		refresher: refresher.clone(),

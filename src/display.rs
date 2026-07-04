@@ -12,6 +12,7 @@
 //! Actions and the out-of-band [`crate::refresh`] task share one path per action.
 
 use openaction::*;
+use serde_json::json;
 
 use crate::color::BarColors;
 use crate::render;
@@ -112,11 +113,47 @@ pub async fn input(
 	.await
 }
 
-/// A device picker (output / switch-input): set the plugin's default title to the
-/// selected device name. The user can override the title, and on an encoder the
-/// icon is theirs too.
+/// Set the plugin title, or clear the override when empty so the key falls back to
+/// the user's own (usually blank) title rather than OpenDeck's default text.
+async fn put_title(instance: &Instance, text: &str) -> OpenActionResult<()> {
+	if text.is_empty() {
+		instance.set_title(None::<String>, None).await
+	} else {
+		instance.set_title(Some(text), None).await
+	}
+}
+
+/// A device picker (switch-input): set the plugin's default title to the selected
+/// device name. The user can override the title, and on an encoder the icon is
+/// theirs too.
 pub async fn picker(instance: &Instance, name: &str) -> OpenActionResult<()> {
-	instance.set_title(Some(name), None).await
+	put_title(instance, name).await
+}
+
+/// Output toggle surface: `title` (the current default output, or the user's
+/// custom title) with the normal icon when active, or the greyed icon when the
+/// current default isn't one of the chosen sinks and `when_inactive == Disable`.
+///
+/// The key stays a single state so OpenDeck keeps the user's title font/position;
+/// the greyed look is a swapped image rather than a second state. On an encoder the
+/// title is the only surface (the dial keeps its own icon).
+pub async fn output(instance: &Instance, title: &str, image: &str) -> OpenActionResult<()> {
+	put_title(instance, title).await?;
+	if is_encoder(instance) {
+		return Ok(());
+	}
+	instance.set_image(Some(image), None).await
+}
+
+/// Set just the key title: a plain title on a keypad, or the `$B1` feedback title
+/// on an encoder (merged, so it leaves the value/bar untouched). Used by the
+/// default volume/mic actions to show their editable "Output"/"Input" label.
+pub async fn title(instance: &Instance, text: &str) -> OpenActionResult<()> {
+	if is_encoder(instance) {
+		instance.set_feedback(&json!({ "title": text })).await
+	} else {
+		put_title(instance, text).await
+	}
 }
 
 /// The App Volume surface: the chosen application's name with its live level bar

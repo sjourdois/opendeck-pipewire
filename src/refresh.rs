@@ -18,6 +18,7 @@ use openaction::*;
 use crate::actions::app_volume::{self, AppVolumeSettings};
 use crate::actions::device_volume::{self, DeviceVolumeSettings};
 use crate::actions::input_volume::{self, InputVolumeSettings};
+use crate::actions::output::{self, OutputSettings};
 use crate::color::BarColors;
 use crate::pw::PwHandle;
 
@@ -28,10 +29,16 @@ pub struct Refresher {
 	device: Arc<Mutex<HashMap<String, DeviceVolumeSettings>>>,
 	input: Arc<Mutex<HashMap<String, InputVolumeSettings>>>,
 	app: Arc<Mutex<HashMap<String, AppVolumeSettings>>>,
+	/// Output-toggle settings, so its key can reflect an out-of-band default-sink
+	/// change (another app, wpctl, media keys…) — active/greyed and which sink.
+	output: Arc<Mutex<HashMap<String, OutputSettings>>>,
 	/// Bar colours of the default sink/source volume actions (which otherwise
 	/// carry no per-instance settings), so their custom colours survive an
 	/// out-of-band redraw.
 	default_colors: Arc<Mutex<HashMap<String, BarColors>>>,
+	/// Custom title (or `None` = show the current default device) of the default
+	/// sink/source volume actions, so their title survives an out-of-band redraw.
+	default_titles: Arc<Mutex<HashMap<String, Option<String>>>>,
 }
 
 impl Refresher {
@@ -68,6 +75,17 @@ impl Refresher {
 		self.app.lock().unwrap().remove(instance_id);
 	}
 
+	pub fn set_output(&self, instance_id: &str, settings: &OutputSettings) {
+		self.output
+			.lock()
+			.unwrap()
+			.insert(instance_id.to_owned(), settings.clone());
+	}
+
+	pub fn forget_output(&self, instance_id: &str) {
+		self.output.lock().unwrap().remove(instance_id);
+	}
+
 	pub fn set_colors(&self, instance_id: &str, colors: &BarColors) {
 		self.default_colors
 			.lock()
@@ -77,6 +95,17 @@ impl Refresher {
 
 	pub fn forget_colors(&self, instance_id: &str) {
 		self.default_colors.lock().unwrap().remove(instance_id);
+	}
+
+	pub fn set_default_title(&self, instance_id: &str, title: Option<String>) {
+		self.default_titles
+			.lock()
+			.unwrap()
+			.insert(instance_id.to_owned(), title);
+	}
+
+	pub fn forget_default_title(&self, instance_id: &str) {
+		self.default_titles.lock().unwrap().remove(instance_id);
 	}
 }
 
@@ -91,11 +120,13 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 			.cloned()
 			.unwrap_or_default()
 	};
+	let default_titles = refresher.default_titles.lock().unwrap().clone();
+	let title_for = |inst: &Instance| default_titles.get(&inst.instance_id).cloned().flatten();
 
-	// Default sink volume + mute.
+	// Default sink volume (bar) + title (current output device, or a custom title).
 	let sink = pw.default_sink_snapshot();
-	if sink.known {
-		for inst in visible_instances(crate::actions::volume::VolumeAction::UUID).await {
+	for inst in visible_instances(crate::actions::volume::VolumeAction::UUID).await {
+		if sink.known {
 			let _ = display::volume(
 				&inst,
 				true,
@@ -105,12 +136,24 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 			)
 			.await;
 		}
+		let title = crate::actions::volume::resolve_title(&title_for(&inst), pw);
+		let _ = display::title(&inst, &title).await;
 	}
 
-	// Default source (mic) volume + mute.
+	// Output toggle: reflect the live default sink (active/greyed + which sink).
+	let output = refresher.output.lock().unwrap().clone();
+	for inst in visible_instances(output::OutputAction::UUID).await {
+		let Some(settings) = output.get(&inst.instance_id) else {
+			continue;
+		};
+		let s = output::surface(settings, pw);
+		let _ = display::output(&inst, &s.title, &s.image).await;
+	}
+
+	// Default source (mic) volume (bar) + title (current input device, or custom).
 	let source = pw.default_source_snapshot();
-	if source.known {
-		for inst in visible_instances(crate::actions::mic_volume::MicVolumeAction::UUID).await {
+	for inst in visible_instances(crate::actions::mic_volume::MicVolumeAction::UUID).await {
+		if source.known {
 			let _ = display::mic(
 				&inst,
 				true,
@@ -120,6 +163,10 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 			)
 			.await;
 		}
+		let title = crate::actions::mic_volume::resolve_title(&title_for(&inst), pw);
+		let _ = display::title(&inst, &title).await;
+	}
+	if source.known {
 		// Push to Talk shows the mic's live state (state 0 = open, 1 = muted).
 		for inst in visible_instances(crate::actions::push_to_talk::PushToTalkAction::UUID).await {
 			let _ = inst.set_state(if source.mute { 1 } else { 0 }).await;

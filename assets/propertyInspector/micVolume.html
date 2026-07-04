@@ -5,6 +5,7 @@
 		<script>
 			let update = () => {};
 			let syncStep = () => {};
+			let syncTitle = () => {};
 
 			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
 				const websocket = new WebSocket("ws://localhost:" + inPort);
@@ -21,11 +22,24 @@
 				const mode = document.getElementById("mode");
 				const unmute = document.getElementById("unmute");
 				const mute = document.getElementById("mute");
+				const title = document.getElementById("title");
+				const useDefault = document.getElementById("useDefault");
 				step.value = settings.step ?? 5;
 				stepValue.innerText = step.value + "%";
 				mode.value = settings.mode ?? "up";
 				unmute.value = settings.unmute_color ?? "#3db36b";
 				mute.value = settings.mute_color ?? "#ff3b30";
+				const savedTitle = settings.title;
+				let customTitle = (typeof savedTitle === "string") ? savedTitle : "";
+				// Checked (no saved string) = the default "Input"; unchecked = the custom
+				// title verbatim, even when empty (blank title).
+				useDefault.checked = typeof savedTitle !== "string";
+				syncTitle = () => {
+					title.disabled = useDefault.checked;
+					title.value = useDefault.checked ? "" : customTitle;
+				};
+				title.addEventListener("input", () => { customTitle = title.value; update(); });
+				syncTitle();
 
 				const isKeypad = inActionInfo.payload.controller != "Encoder";
 				if (!isKeypad) document.getElementById("direction").style.display = "none";
@@ -42,6 +56,7 @@
 						payload: {
 							step: parseInt(step.value, 10),
 							mode: mode.value,
+							title: useDefault.checked ? null : customTitle,
 							unmute_color: unmute.value,
 							mute_color: mute.value,
 						},
@@ -55,6 +70,14 @@
 		<div class="sdpi-wrapper">
 			<div class="action-title">Input Volume</div>
 			<div class="action-desc">Adjust the default input (microphone) volume. On a keypad, choose whether a press raises, lowers, or mutes; an encoder rotates for volume and presses to mute.</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Title</div>
+				<div class="sdpi-item-value label-row">
+					<input id="useDefault" type="checkbox" onchange="update(); syncTitle()" />
+					<label for="useDefault" class="cap">Current device</label>
+					<input id="title" type="text" placeholder="Custom title" />
+				</div>
+			</div>
 			<div class="sdpi-item" id="direction">
 				<div class="sdpi-item-label">On press</div>
 				<select id="mode" class="sdpi-item-value select" onchange="update(); syncStep()">
