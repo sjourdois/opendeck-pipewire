@@ -9,7 +9,9 @@ pub enum Command {
 	AdjustVolume(f32),
 	/// Set mute on the default sink. `None` toggles.
 	SetMute(Option<bool>),
-	/// Make the sink with this `node.name` the system default output.
+	/// Make the sink with this `node.name` the system default output, by setting
+	/// the *configured* default (`default.configured.audio.sink`) so the choice is
+	/// sticky rather than transient.
 	SetDefaultSink(String),
 	/// Change the volume of every stream of an app by this cubic delta.
 	AdjustAppVolume(String, f32),

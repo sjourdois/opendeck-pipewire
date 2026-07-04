@@ -528,13 +528,18 @@ fn on_command(inner: &Rc<RefCell<Inner>>, cmd: Command) {
 			match b._metadata.as_ref() {
 				Some((metadata, _)) => {
 					let value = serde_json::json!({ "name": name }).to_string();
+					// Set the *configured* default (sticky, like `wpctl set-default`)
+					// rather than the transient `default.audio.sink`: the latter can be
+					// overridden by WirePlumber on its next default-node evaluation (e.g.
+					// when another agent has set `default.configured.audio.sink`), so a
+					// plain switch would not "stick".
 					metadata.set_property(
 						0,
-						"default.audio.sink",
+						"default.configured.audio.sink",
 						Some("Spa:String:JSON"),
 						Some(&value),
 					);
-					log::info!("set default sink -> {name}");
+					log::info!("set configured default sink -> {name}");
 				}
 				None => log::warn!("No 'default' metadata available; cannot switch sink"),
 			}
