@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Editable key titles**: the Output/Input Device and Output/Input Volume keys show
+  the current default device, or a custom title from the property inspector (blank
+  when cleared).
+- **Output Device — per-device icons**: assign an icon to each configured output (and
+  one for when another device is active); the key shows the active output's icon.
+- **Output Device — disable when inactive**: optionally grey out and ignore presses
+  when the default isn't one of the chosen sinks, instead of cycling into the list.
+  The key also tracks out-of-band default-sink changes live.
+
+### Changed
+
+- Output Device now switches the *configured* default (`default.configured.audio.sink`,
+  like `wpctl set-default`), so the choice sticks.
+
 ## [0.2.0]
 
 ### Added

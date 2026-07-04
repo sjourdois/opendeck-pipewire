@@ -26,7 +26,7 @@ reimplemented natively in Rust.
 | **Output Volume** | Keypad · Encoder | Adjust the default output (sink) volume; live %-bar key image |
 | **Output Device Volume** | Keypad · Encoder | Adjust the volume of a specific named output device |
 | **Output App Volume** | Keypad · Encoder | Adjust the volume of a specific application (Firefox, Spotify, …) |
-| **Output Device** | Keypad · Encoder | Switch the system default output; pick several devices to cycle through them |
+| **Output Device** | Keypad · Encoder | Switch the system default output; pick several devices to cycle through them, or toggle a subset and grey out when another device is active |
 | **Input Volume** | Keypad · Encoder | Adjust the default input (mic/source) volume |
 | **Input Device Volume** | Keypad · Encoder | Adjust the volume of a specific named input device |
 | **Input Device** | Keypad · Encoder | Switch the system default input; pick several devices to cycle through them |
