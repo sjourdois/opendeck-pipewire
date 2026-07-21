@@ -26,7 +26,7 @@ reimplemented natively in Rust.
 | **Output Volume** | Keypad · Encoder | Adjust the default output (sink) volume; live %-bar key image |
 | **Output Device Volume** | Keypad · Encoder | Adjust the volume of a specific named output device |
 | **Output App Volume** | Keypad · Encoder | Adjust the volume of a specific application (Firefox, Spotify, …) |
-| **Output Device** | Keypad · Encoder | Switch the system default output; pick several devices to cycle through them, or toggle a subset and grey out when another device is active |
+| **Output Device** | Keypad · Encoder | Switch the system default output; pick several devices to cycle through them, with a per-device icon, or toggle a subset and grey out when another device is active |
 | **Input Volume** | Keypad · Encoder | Adjust the default input (mic/source) volume |
 | **Input Device Volume** | Keypad · Encoder | Adjust the volume of a specific named input device |
 | **Input Device** | Keypad · Encoder | Switch the system default input; pick several devices to cycle through them |
@@ -40,6 +40,9 @@ encoder the dial always rotates for volume and presses to mute, regardless of mo
 
 The **App Volume** key/dial shows a live level bar for the chosen application,
 aggregated across its streams.
+
+The Device and Volume keys **title** themselves with the current default device by
+default, and take a custom title from the property inspector (blank to clear).
 
 Every volume action's **bar colours** (unmuted and muted) are configurable in the
 property inspector. When muted, a keypad key gets a bold diagonal slash in the mute

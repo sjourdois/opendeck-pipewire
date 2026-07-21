@@ -4,24 +4,6 @@ All notable changes to this project are documented in this file. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- **Editable key titles**: the Output/Input Device and Output/Input Volume keys show
-  the current default device, or a custom title from the property inspector (blank
-  when cleared).
-- **Output Device — per-device icons**: assign an icon to each configured output (and
-  one for when another device is active); the key shows the active output's icon.
-- **Output Device — disable when inactive**: optionally grey out and ignore presses
-  when the default isn't one of the chosen sinks, instead of cycling into the list.
-  The key also tracks out-of-band default-sink changes live.
-
-### Changed
-
-- Output Device now switches the *configured* default (`default.configured.audio.sink`,
-  like `wpctl set-default`), so the choice sticks.
-
 ## [0.2.0]
 
 ### Added
@@ -36,12 +18,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list of devices (add / reorder / remove in the property inspector) and each press
   cycles the system default to the next one (a single device keeps the old
   switch-to-it behaviour).
+- **Output Device — per-device icons**: assign an icon to each configured output (and
+  one for when another device is active); the key shows the active output's icon.
+- **Output Device — disable when inactive**: optionally grey out and ignore presses
+  when the default isn't one of the chosen sinks, instead of cycling into the list.
+  The key also tracks out-of-band default-sink changes live.
+- **Editable key titles**: the Output/Input Device and Output/Input Volume keys show
+  the current default device, or a custom title from the property inspector (blank
+  when cleared).
 - **Configurable bar colours**: every volume action's unmuted and muted bar colour
   can be set in the property inspector. Muted keypad keys get a diagonal slash in
   the mute colour; the touchstrip turns its value and bar that colour instead.
 
 ### Changed
 
+- Output Device switches the *configured* default (`default.configured.audio.sink`,
+  like `wpctl set-default`), so the choice sticks.
 - **Unified mute into the volume actions**: each volume action now has an *On press*
   mode — *Volume up*, *Volume down*, or *Toggle mute* — so muting any target (the
   default sink/source, a specific device, or an application) is just a volume action
@@ -89,7 +81,6 @@ dedicated Mute action), and **no Node.js or Wine** at runtime.
 - GPL-3.0-or-later license, CI (fmt + clippy + build) and a release workflow that
   bundles the `.sdPlugin` for x86_64 and aarch64 Linux.
 
-[Unreleased]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sjourdois/opendeck-pipewire/releases/tag/v0.1.0
