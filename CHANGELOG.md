@@ -10,6 +10,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - CI actions bumped off the deprecated Node 20 runtime.
 
+### Fixed
+
+- Reconnect automatically after a PipeWire daemon restart, instead of going inert.
+
 ## [0.2.0]
 
 ### Added

@@ -210,7 +210,25 @@ impl Inner {
 		}
 		self.bump();
 	}
+
+	/// Forget every tracked object after a disconnect: their proxies belong to the
+	/// now-dead core, and the next connection rediscovers everything from a fresh
+	/// registry. The emptied lists are republished so the UI reflects the gap.
+	fn reset(&mut self) {
+		self.nodes.clear();
+		self.devices.clear();
+		self._metadata = None;
+		self.default_sink_name = None;
+		self.default_source_name = None;
+		self.refresh_sinks();
+		self.refresh_sources();
+		self.refresh_apps();
+	}
 }
+
+/// How long to wait before re-dialing the daemon after a lost connection (also
+/// the retry interval while it is still down, e.g. mid-`restart`).
+const RECONNECT_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
 pub(super) fn run_loop(rx: pipewire::channel::Receiver<Command>, chans: Channels) -> Result<()> {
 	use pipewire::context::ContextRc;
@@ -219,32 +237,66 @@ pub(super) fn run_loop(rx: pipewire::channel::Receiver<Command>, chans: Channels
 	pipewire::init();
 
 	let main_loop = MainLoopRc::new(None)?;
-	let context = ContextRc::new(&main_loop, None)?;
-	let core = context.connect_rc(None)?;
-	// A ref-counted registry so the `global` callback below can bind new objects.
-	let registry = core.get_registry_rc()?;
-
 	let inner = Rc::new(RefCell::new(Inner::new(chans)));
 
-	// --- Registry: discover audio sink nodes and the default-sink metadata ---
-	let reg_for_cb = registry.clone();
-	let inner_g = inner.clone();
-	let inner_r = inner.clone();
-	let _registry_listener = registry
-		.add_listener_local()
-		.global(move |global| on_global(&inner_g, &reg_for_cb, global))
-		.global_remove(move |id| on_global_remove(&inner_r, id))
-		.register();
-
 	// --- Commands from actions, delivered inside this loop ---
+	// Attached once for the thread's whole life: the receiver survives reconnects,
+	// so commands keep flowing after the PipeWire daemon is restarted.
 	let inner_c = inner.clone();
 	let _recv = rx.attach(main_loop.loop_(), move |cmd| {
 		on_command(&inner_c, cmd);
 	});
 
-	log::info!("PipeWire backend connected; entering main loop");
-	main_loop.run();
-	Ok(())
+	// Reconnect loop: `systemctl --user restart pipewire` (or any daemon crash)
+	// severs the connection and fires a fatal core error, which quits the inner
+	// `run()`. We then drop the dead connection, clear the stale object state, and
+	// dial back in — rediscovering everything from the fresh registry.
+	loop {
+		let context = ContextRc::new(&main_loop, None)?;
+		let core = match context.connect_rc(None) {
+			Ok(core) => core,
+			Err(error) => {
+				log::warn!("PipeWire connect failed: {error}; retrying");
+				std::thread::sleep(RECONNECT_DELAY);
+				continue;
+			}
+		};
+		// A ref-counted registry so the `global` callback below can bind new objects.
+		let registry = core.get_registry_rc()?;
+
+		// A fatal error on the core object (id 0) — most often the daemon going
+		// away — is our disconnect signal: quit the loop so we reconnect below.
+		let ml = main_loop.clone();
+		let _core_listener = core
+			.add_listener_local()
+			.error(move |id, _seq, res, message| {
+				log::warn!("core error (id {id}, res {res}): {message}");
+				if id == pipewire::core::PW_ID_CORE {
+					ml.quit();
+				}
+			})
+			.register();
+
+		// --- Registry: discover audio sink nodes and the default-sink metadata ---
+		let reg_for_cb = registry.clone();
+		let inner_g = inner.clone();
+		let inner_r = inner.clone();
+		let _registry_listener = registry
+			.add_listener_local()
+			.global(move |global| on_global(&inner_g, &reg_for_cb, global))
+			.global_remove(move |id| on_global_remove(&inner_r, id))
+			.register();
+
+		log::info!("PipeWire backend connected; entering main loop");
+		main_loop.run();
+
+		// `run()` only returns once the core error quit it, i.e. the connection
+		// dropped. Clear the stale nodes/devices/metadata while their (dead) core
+		// still exists, then let the connection objects drop and reconnect.
+		inner.borrow_mut().reset();
+		log::warn!("PipeWire connection lost; reconnecting in {RECONNECT_DELAY:?}");
+		std::thread::sleep(RECONNECT_DELAY);
+	}
 }
 
 fn on_global(
