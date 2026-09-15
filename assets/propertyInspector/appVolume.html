@@ -2,9 +2,21 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
+		<style>
+			.icon-btn {
+				width: 28px;
+				height: 28px;
+				padding: 0;
+				flex: 0 0 auto;
+				background-size: cover;
+				background-position: center;
+				background-repeat: no-repeat;
+			}
+		</style>
 		<script>
 			let update = () => {};
 			let syncStep = () => {};
+			let syncLabel = () => {};
 
 			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
 				const websocket = new WebSocket("ws://localhost:" + inPort);
@@ -16,19 +28,75 @@
 					websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
 				};
 
-				const app = document.getElementById("app");
-				const step = document.getElementById("step");
+			const app = document.getElementById("app");
+			const name = document.getElementById("name");
+			const step = document.getElementById("step");
 				const stepValue = document.getElementById("stepValue");
 				const direction = document.getElementById("direction");
 				const mode = document.getElementById("mode");
 				const unmute = document.getElementById("unmute");
 				const mute = document.getElementById("mute");
+			const unavailable = document.getElementById("unavailable");
 
-				step.value = settings.step ?? 5;
-				stepValue.innerText = step.value + "%";
-				mode.value = settings.mode ?? "up";
-				unmute.value = settings.unmute_color ?? "#3db36b";
-				mute.value = settings.mute_color ?? "#ff3b30";
+			step.value = settings.step ?? 5;
+			stepValue.innerText = step.value + "%";
+			mode.value = settings.mode ?? "up";
+			unmute.value = settings.unmute_color ?? "#3db36b";
+			mute.value = settings.mute_color ?? "#ff3b30";
+			unavailable.value = settings.unavailable_color ?? "#eab308";
+
+			const useName = document.getElementById("useName");
+			let customName = settings.name ?? "";
+			// Checked = use the application's own name; unchecked frees a custom label.
+			useName.checked = !customName;
+			const appDesc = () => (app.value && app.selectedOptions[0]) ? app.selectedOptions[0].text : "";
+			syncLabel = () => {
+				name.disabled = useName.checked;
+				name.value = useName.checked ? (appDesc() || current) : customName;
+			};
+			name.addEventListener("input", () => { customName = name.value; });
+
+			const limit = document.getElementById("limit");
+			limit.checked = settings.limit_100 ?? false;
+
+			const iconBox = document.getElementById("icon");
+			let icon = settings.icon || null;
+			const pickIcon = (cb) => {
+				const inp = document.createElement("input");
+				inp.type = "file";
+				inp.accept = "image/*";
+				// Kept in the document (invisible): a detached file input does not
+				// reliably open a picker / fire change in every webview.
+				inp.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
+				document.body.appendChild(inp);
+				inp.addEventListener("change", () => {
+					const f = inp.files && inp.files[0];
+					inp.remove();
+					if (!f) return;
+					const r = new FileReader();
+					r.onload = () => cb(r.result);
+					r.readAsDataURL(f);
+				});
+				inp.click();
+			};
+			const renderIcon = () => {
+				iconBox.innerHTML = "";
+				const btn = document.createElement("button");
+				btn.className = "icon-btn";
+				btn.title = icon ? "Change icon" : "Set icon";
+				if (icon) btn.style.backgroundImage = `url("${icon}")`;
+				else btn.textContent = "🖼";
+				btn.addEventListener("click", () => pickIcon((u) => { icon = u; update(); renderIcon(); }));
+				iconBox.appendChild(btn);
+				if (icon) {
+					const clr = document.createElement("button");
+					clr.textContent = "⌫";
+					clr.title = "Remove icon";
+					clr.addEventListener("click", () => { icon = null; update(); renderIcon(); });
+					iconBox.appendChild(clr);
+				}
+			};
+			renderIcon();
 
 				const isKeypad = inActionInfo.payload.controller != "Encoder";
 				if (!isKeypad) direction.style.display = "none";
@@ -44,10 +112,17 @@
 						context: context,
 						payload: {
 							app: app.value,
+							// Use the tracked custom label, not the live field: when
+							// "Application name" is checked the field still shows
+							// the (disabled) application name.
+							name: useName.checked ? "" : customName,
 							step: parseInt(step.value, 10),
 							mode: mode.value,
 							unmute_color: unmute.value,
 							mute_color: mute.value,
+							unavailable_color: unavailable.value,
+							icon: icon,
+							limit_100: limit.checked,
 						},
 					}));
 				};
@@ -77,8 +152,11 @@
 						app.appendChild(option);
 					}
 					warning.style.display = loaded && current && !found ? "" : "none";
+					// Refresh the greyed "application name" label now the names are in.
+					syncLabel();
 				};
 				renderApps([], false);
+				syncLabel();
 
 				websocket.onmessage = (event) => {
 					const data = JSON.parse(event.data);
@@ -96,12 +174,20 @@
 			<div class="action-desc">Adjust a specific application's volume (aggregated across its streams). On a keypad, choose whether a press raises, lowers, or mutes; an encoder rotates for volume and presses to mute.</div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Application</div>
-				<select id="app" class="sdpi-item-value select" onchange="update()">
+				<select id="app" class="sdpi-item-value select" onchange="update(); syncLabel()">
 					<option value="">— select application —</option>
 				</select>
 			</div>
 			<div id="warning" style="display: none; margin: -4px 0 8px; color: #f7821b; font-size: 9pt">
 				⚠ The saved application isn't currently running.
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Label</div>
+				<div class="sdpi-item-value label-row">
+					<input id="useName" type="checkbox" onchange="update(); syncLabel()" />
+					<label for="useName" class="cap">Application name</label>
+					<input id="name" type="text" placeholder="Custom label" onchange="update()" />
+				</div>
 			</div>
 			<div class="sdpi-item" id="direction">
 				<div class="sdpi-item-label">On press</div>
@@ -116,12 +202,27 @@
 				<input id="step" class="sdpi-item-value" type="range" min="1" max="20" value="5" onchange="update()" />
 			</div>
 			<div class="sdpi-item">
+				<div class="sdpi-item-label">Max volume</div>
+				<div class="sdpi-item-value label-row">
+					<input id="limit" type="checkbox" onchange="update()" />
+					<label for="limit" class="cap">Limit to 100%</label>
+				</div>
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Icon</div>
+				<div class="sdpi-item-value label-row" id="icon"></div>
+			</div>
+			<div class="sdpi-item">
 				<div class="sdpi-item-label">Bar color</div>
 				<input id="unmute" class="sdpi-item-value" type="color" value="#3db36b" onchange="update()" />
 			</div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Muted color</div>
 				<input id="mute" class="sdpi-item-value" type="color" value="#ff3b30" onchange="update()" />
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">N/A color</div>
+				<input id="unavailable" class="sdpi-item-value" type="color" value="#eab308" onchange="update()" />
 			</div>
 		</div>
 	</body>

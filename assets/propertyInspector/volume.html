@@ -2,6 +2,17 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
+		<style>
+			.icon-btn {
+				width: 28px;
+				height: 28px;
+				padding: 0;
+				flex: 0 0 auto;
+				background-size: cover;
+				background-position: center;
+				background-repeat: no-repeat;
+			}
+		</style>
 		<script>
 			let update = () => {};
 			let syncStep = () => {};
@@ -22,10 +33,54 @@
 				const mode = document.getElementById("mode");
 				mode.value = inActionInfo.payload.settings.mode ?? "up";
 
-				const unmute = document.getElementById("unmute");
-				const mute = document.getElementById("mute");
-				unmute.value = inActionInfo.payload.settings.unmute_color ?? "#3db36b";
-				mute.value = inActionInfo.payload.settings.mute_color ?? "#ff3b30";
+			const unmute = document.getElementById("unmute");
+			const mute = document.getElementById("mute");
+			const unavailable = document.getElementById("unavailable");
+			unmute.value = inActionInfo.payload.settings.unmute_color ?? "#3db36b";
+			mute.value = inActionInfo.payload.settings.mute_color ?? "#ff3b30";
+			unavailable.value = inActionInfo.payload.settings.unavailable_color ?? "#eab308";
+
+			const limit = document.getElementById("limit");
+			limit.checked = inActionInfo.payload.settings.limit_100 ?? false;
+
+			const iconBox = document.getElementById("icon");
+			let icon = inActionInfo.payload.settings.icon || null;
+			const pickIcon = (cb) => {
+				const inp = document.createElement("input");
+				inp.type = "file";
+				inp.accept = "image/*";
+				// Kept in the document (invisible): a detached file input does not
+				// reliably open a picker / fire change in every webview.
+				inp.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
+				document.body.appendChild(inp);
+				inp.addEventListener("change", () => {
+					const f = inp.files && inp.files[0];
+					inp.remove();
+					if (!f) return;
+					const r = new FileReader();
+					r.onload = () => cb(r.result);
+					r.readAsDataURL(f);
+				});
+				inp.click();
+			};
+			const renderIcon = () => {
+				iconBox.innerHTML = "";
+				const btn = document.createElement("button");
+				btn.className = "icon-btn";
+				btn.title = icon ? "Change icon" : "Set icon";
+				if (icon) btn.style.backgroundImage = `url("${icon}")`;
+				else btn.textContent = "🖼";
+				btn.addEventListener("click", () => pickIcon((u) => { icon = u; update(); renderIcon(); }));
+				iconBox.appendChild(btn);
+				if (icon) {
+					const clr = document.createElement("button");
+					clr.textContent = "⌫";
+					clr.title = "Remove icon";
+					clr.addEventListener("click", () => { icon = null; update(); renderIcon(); });
+					iconBox.appendChild(clr);
+				}
+			};
+			renderIcon();
 
 				const useDefault = document.getElementById("useDefault");
 				const title = document.getElementById("title");
@@ -63,6 +118,9 @@
 							title: useDefault.checked ? null : customTitle,
 							unmute_color: unmute.value,
 							mute_color: mute.value,
+							unavailable_color: unavailable.value,
+							icon: icon,
+							limit_100: limit.checked,
 						},
 					}));
 				};
@@ -95,12 +153,27 @@
 				<input id="step" class="sdpi-item-value" type="range" min="1" max="20" value="5" onchange="update()" />
 			</div>
 			<div class="sdpi-item">
+				<div class="sdpi-item-label">Max volume</div>
+				<div class="sdpi-item-value label-row">
+					<input id="limit" type="checkbox" onchange="update()" />
+					<label for="limit" class="cap">Limit to 100%</label>
+				</div>
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Icon</div>
+				<div class="sdpi-item-value label-row" id="icon"></div>
+			</div>
+			<div class="sdpi-item">
 				<div class="sdpi-item-label">Bar color</div>
 				<input id="unmute" class="sdpi-item-value" type="color" value="#3db36b" onchange="update()" />
 			</div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Muted color</div>
 				<input id="mute" class="sdpi-item-value" type="color" value="#ff3b30" onchange="update()" />
+			</div>
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">N/A color</div>
+				<input id="unavailable" class="sdpi-item-value" type="color" value="#eab308" onchange="update()" />
 			</div>
 		</div>
 	</body>

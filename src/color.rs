@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 pub const ACTIVE: &str = "#3db36b";
 /// Level-bar / value colour when muted.
 pub const MUTE: &str = "#ff3b30";
+/// Level-bar / value colour when the audio stream is unavailable (default yellow).
+pub const UNAVAILABLE: &str = "#eab308";
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
@@ -19,6 +21,9 @@ pub struct BarColors {
 	pub unmute_color: Option<String>,
 	/// Level-bar (and keypad mute-slash) colour when muted (default red, [`MUTE`]).
 	pub mute_color: Option<String>,
+	/// Level-bar / value colour when the stream is unavailable (default yellow,
+	/// [`UNAVAILABLE`]).
+	pub unavailable_color: Option<String>,
 }
 
 impl BarColors {
@@ -30,6 +35,12 @@ impl BarColors {
 	/// The muted bar / slash colour, validated (falls back to [`MUTE`]).
 	pub fn mute(&self) -> &str {
 		pick(&self.mute_color, MUTE)
+	}
+
+	/// The unavailable ("n/a") bar / value colour, validated (falls back to
+	/// [`UNAVAILABLE`]).
+	pub fn unavailable(&self) -> &str {
+		pick(&self.unavailable_color, UNAVAILABLE)
 	}
 
 	/// The bar colour for the current mute state.

@@ -11,12 +11,15 @@ use crate::color::BarColors;
 use crate::command::Command;
 use crate::pw::{AppDesc, PwHandle};
 use crate::refresh::Refresher;
+use crate::ui::VolumeUi;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct AppVolumeSettings {
 	/// `application.name` to control (e.g. "Firefox", "spotify").
 	pub app: Option<String>,
+	/// Custom label shown on the key.
+	pub name: String,
 	/// Step per key press / dial tick, in percent (clamped to 1–20).
 	pub step: u8,
 	/// What a Keypad press does: volume up, down, or toggle mute.
@@ -24,15 +27,20 @@ pub struct AppVolumeSettings {
 	/// User-configurable level-bar colours (unmuted / muted).
 	#[serde(flatten)]
 	pub colors: BarColors,
+	/// Custom icon and 100%-limit.
+	#[serde(flatten)]
+	pub ui: VolumeUi,
 }
 
 impl Default for AppVolumeSettings {
 	fn default() -> Self {
 		Self {
 			app: None,
+			name: String::new(),
 			step: 5,
 			mode: super::KeyMode::Up,
 			colors: BarColors::default(),
+			ui: VolumeUi::default(),
 		}
 	}
 }
@@ -41,6 +49,17 @@ impl Default for AppVolumeSettings {
 struct AppsMessage {
 	event: &'static str,
 	apps: Vec<AppDesc>,
+}
+
+/// The key label: the custom name if set, else the application name, else "App".
+pub fn label(settings: &AppVolumeSettings) -> String {
+	if !settings.name.is_empty() {
+		return settings.name.clone();
+	}
+	match settings.app.as_deref().filter(|s| !s.is_empty()) {
+		Some(app) => app.to_owned(),
+		None => "App".to_owned(),
+	}
 }
 
 pub struct AppVolumeAction {
@@ -101,7 +120,8 @@ impl Action for AppVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_app(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings);
+		crate::display::encoder_layout(instance).await?;
+		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
 		self.render(instance, settings, vol, mute).await
 	}
 
@@ -120,7 +140,7 @@ impl Action for AppVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_app(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings);
+		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
 		self.render(instance, settings, vol, mute).await
 	}
 
@@ -144,12 +164,10 @@ impl AppVolumeAction {
 		settings.app.as_deref().filter(|s| !s.is_empty())
 	}
 
-	/// Live aggregate (volume_cubic, mute) of the chosen app's streams, or
-	/// (0, false) when none is set or it isn't currently playing.
-	fn state(&self, settings: &AppVolumeSettings) -> (f32, bool) {
-		self.app(settings)
-			.and_then(|a| self.pw.app_state(a))
-			.unwrap_or((0.0, false))
+	/// Live aggregate (volume_cubic, mute) of the chosen app's streams, or `None`
+	/// when no app is configured or it isn't currently playing.
+	fn state(&self, settings: &AppVolumeSettings) -> Option<(f32, bool)> {
+		self.app(settings).and_then(|a| self.pw.app_state(a))
 	}
 
 	async fn adjust(
@@ -167,11 +185,12 @@ impl AppVolumeAction {
 			self.pw
 				.send(Command::SetAppMute(app.to_owned(), Some(false)));
 		}
+		let delta = settings.ui.limit_delta(cur, delta_cubic);
 		self.pw
-			.send(Command::AdjustAppVolume(app.to_owned(), delta_cubic));
+			.send(Command::AdjustAppVolume(app.to_owned(), delta));
 		// Optimistic render so the bar moves instantly (the real Props event will
 		// reconcile a moment later).
-		let next = (cur + delta_cubic).clamp(0.0, 1.5);
+		let next = (cur + delta).clamp(0.0, settings.ui.max_cubic());
 		self.render(instance, settings, next, false).await
 	}
 
@@ -197,6 +216,48 @@ impl AppVolumeAction {
 		vol: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
-		crate::display::app(instance, self.app(settings), vol, mute, &settings.colors).await
+		let app = self.app(settings);
+		// `known` re-resolves the live state so an app that stopped playing (or
+		// was never configured) renders "n/a" instead of a stale level.
+		let known = app.is_some_and(|a| self.pw.app_state(a).is_some());
+		crate::display::app(
+			instance,
+			&label(settings),
+			known,
+			vol,
+			mute,
+			&settings.colors,
+			&settings.ui,
+		)
+		.await
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn label_prefers_custom_name() {
+		let custom = AppVolumeSettings {
+			app: Some("Brave".to_owned()),
+			name: "Browser".to_owned(),
+			..AppVolumeSettings::default()
+		};
+		assert_eq!(label(&custom), "Browser");
+		let plain = AppVolumeSettings {
+			app: Some("Brave".to_owned()),
+			..AppVolumeSettings::default()
+		};
+		assert_eq!(label(&plain), "Brave");
+		assert_eq!(label(&AppVolumeSettings::default()), "App");
+	}
+
+	#[test]
+	fn pi_payload_with_label_parses() {
+		let json = r##"{"app":"Brave","name":"Browser","step":5,"mode":"up","unmute_color":"#3db36b","mute_color":"#ff3b30","icon":null,"limit_100":true}"##;
+		let s: AppVolumeSettings = serde_json::from_str(json).unwrap();
+		assert_eq!(label(&s), "Browser");
+		assert!(s.ui.limit_100);
 	}
 }

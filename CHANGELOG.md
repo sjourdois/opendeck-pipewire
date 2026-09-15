@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Unavailable streams show "n/a" on a coloured bar**: when a volume target
+  isn't available (no default device, a configured device that's gone, an app
+  that isn't playing), the key and the encoder touchstrip show "n/a" with a
+  full bar in a configurable colour (yellow by default) instead of the "—"
+  placeholder / empty bar.
+- **Custom icons for all volume actions**: pick an image in the property
+  inspector; it is drawn undistorted at the top of the keypad key and sent as
+  the encoder touchstrip icon (padded to a square so the strip doesn't stretch
+  it).
+- **Limit to 100%**: an optional checkbox caps volume increases through the
+  action at 100% instead of the +50% boost range.
+- **Custom label for App Volume**: like the device volume actions, the app key
+  can show a custom label instead of the application name.
+- **Larger dial titles**: the volume actions switch their encoder to a shipped
+  `$B1`-based layout with a larger title font at runtime (no re-adding of
+  buttons needed).
+- **Recognizable dial previews**: the OpenDeck window now shows the custom
+  icon plus the label for encoder instances (the preview doesn't render
+  touchstrip feedback values; the value keeps its own strip slot instead of
+  duplicating into the title).
+
 ### Changed
 
 - CI actions bumped off the deprecated Node 20 runtime.

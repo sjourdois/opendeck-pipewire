@@ -10,6 +10,7 @@ use crate::color::BarColors;
 use crate::command::Command;
 use crate::pw::PwHandle;
 use crate::refresh::Refresher;
+use crate::ui::VolumeUi;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -23,6 +24,9 @@ pub struct MicVolumeSettings {
 	/// User-configurable level-bar colours (unmuted / muted).
 	#[serde(flatten)]
 	pub colors: BarColors,
+	/// Custom icon and 100%-limit.
+	#[serde(flatten)]
+	pub ui: VolumeUi,
 }
 
 impl Default for MicVolumeSettings {
@@ -32,6 +36,7 @@ impl Default for MicVolumeSettings {
 			mode: super::KeyMode::Up,
 			title: None,
 			colors: BarColors::default(),
+			ui: VolumeUi::default(),
 		}
 	}
 }
@@ -110,10 +115,8 @@ impl Action for MicVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		self.refresher
-			.set_colors(&instance.instance_id, &settings.colors);
-		self.refresher
-			.set_default_title(&instance.instance_id, settings.title.clone());
+		self.refresher.set_mic(&instance.instance_id, settings);
+		crate::display::encoder_layout(instance).await?;
 		self.refresh(instance, settings).await?;
 		crate::display::title(instance, &resolve_title(&settings.title, &self.pw)).await
 	}
@@ -123,8 +126,7 @@ impl Action for MicVolumeAction {
 		instance: &Instance,
 		_settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		self.refresher.forget_colors(&instance.instance_id);
-		self.refresher.forget_default_title(&instance.instance_id);
+		self.refresher.forget_mic(&instance.instance_id);
 		Ok(())
 	}
 
@@ -133,10 +135,7 @@ impl Action for MicVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		self.refresher
-			.set_colors(&instance.instance_id, &settings.colors);
-		self.refresher
-			.set_default_title(&instance.instance_id, settings.title.clone());
+		self.refresher.set_mic(&instance.instance_id, settings);
 		self.refresh(instance, settings).await?;
 		crate::display::title(instance, &resolve_title(&settings.title, &self.pw)).await
 	}
@@ -150,11 +149,13 @@ impl MicVolumeAction {
 		settings: &MicVolumeSettings,
 		delta_cubic: f32,
 	) -> OpenActionResult<()> {
-		if self.pw.default_source_snapshot().mute {
+		let snap = self.pw.default_source_snapshot();
+		if snap.mute {
 			self.pw.send(Command::SetDefaultSourceMute(Some(false)));
 		}
-		self.pw
-			.send(Command::AdjustDefaultSourceVolume(delta_cubic));
+		self.pw.send(Command::AdjustDefaultSourceVolume(
+			settings.ui.limit_delta(snap.volume_cubic, delta_cubic),
+		));
 		self.refresh(instance, settings).await
 	}
 
@@ -170,10 +171,12 @@ impl MicVolumeAction {
 		self.pw.send(Command::SetDefaultSourceMute(Some(target)));
 		crate::display::mic(
 			instance,
+			&resolve_title(&settings.title, &self.pw),
 			snap.known,
 			snap.volume_cubic,
 			target,
 			&settings.colors,
+			&settings.ui,
 		)
 		.await
 	}
@@ -186,10 +189,12 @@ impl MicVolumeAction {
 		let snap = self.pw.default_source_snapshot();
 		crate::display::mic(
 			instance,
+			&resolve_title(&settings.title, &self.pw),
 			snap.known,
 			snap.volume_cubic,
 			snap.mute,
 			&settings.colors,
+			&settings.ui,
 		)
 		.await
 	}

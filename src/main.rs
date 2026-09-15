@@ -11,6 +11,7 @@ mod display;
 mod pw;
 mod refresh;
 mod render;
+mod ui;
 
 use actions::{
 	app_volume, device_volume, input_volume, mic_volume, output, push_to_talk, switch_input, volume,
