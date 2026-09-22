@@ -24,7 +24,7 @@
 				const mode = document.getElementById("mode");
 				const unmute = document.getElementById("unmute");
 				const mute = document.getElementById("mute");
-			const unavailable = document.getElementById("unavailable");
+				const unavailable = document.getElementById("unavailable");
 
 				const useName = document.getElementById("useName");
 				let customName = settings.name ?? "";
@@ -38,18 +38,18 @@
 				};
 				name.addEventListener("input", () => { customName = name.value; });
 				syncLabel();
-			step.value = settings.step ?? 5;
-			stepValue.innerText = step.value + "%";
-			mode.value = settings.mode ?? "up";
-			unmute.value = settings.unmute_color ?? "#3db36b";
-			mute.value = settings.mute_color ?? "#ff3b30";
-			unavailable.value = settings.unavailable_color ?? "#eab308";
+				step.value = settings.step ?? 5;
+				stepValue.innerText = step.value + "%";
+				mode.value = settings.mode ?? "up";
+				unmute.value = settings.unmute_color ?? "#3db36b";
+				mute.value = settings.mute_color ?? "#ff3b30";
+				unavailable.value = settings.unavailable_color ?? "#eab308";
 
-			const limit = document.getElementById("limit");
-			limit.checked = settings.limit_100 ?? false;
+				const limit = document.getElementById("limit");
+				limit.checked = settings.limit_100 ?? false;
 
-			const iconBox = document.getElementById("icon");
-			let icon = settings.icon || null;
+				const iconBox = document.getElementById("icon");
+				let icon = settings.icon || null;
 				iconRow(iconBox, () => icon, (u) => { icon = u; }, () => update());
 
 				const isKeypad = inActionInfo.payload.controller != "Encoder";

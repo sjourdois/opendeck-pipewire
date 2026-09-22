@@ -22,18 +22,18 @@
 				const mode = document.getElementById("mode");
 				mode.value = inActionInfo.payload.settings.mode ?? "up";
 
-			const unmute = document.getElementById("unmute");
-			const mute = document.getElementById("mute");
-			const unavailable = document.getElementById("unavailable");
-			unmute.value = inActionInfo.payload.settings.unmute_color ?? "#3db36b";
-			mute.value = inActionInfo.payload.settings.mute_color ?? "#ff3b30";
-			unavailable.value = inActionInfo.payload.settings.unavailable_color ?? "#eab308";
+				const unmute = document.getElementById("unmute");
+				const mute = document.getElementById("mute");
+				const unavailable = document.getElementById("unavailable");
+				unmute.value = inActionInfo.payload.settings.unmute_color ?? "#3db36b";
+				mute.value = inActionInfo.payload.settings.mute_color ?? "#ff3b30";
+				unavailable.value = inActionInfo.payload.settings.unavailable_color ?? "#eab308";
 
-			const limit = document.getElementById("limit");
-			limit.checked = inActionInfo.payload.settings.limit_100 ?? false;
+				const limit = document.getElementById("limit");
+				limit.checked = inActionInfo.payload.settings.limit_100 ?? false;
 
-			const iconBox = document.getElementById("icon");
-			let icon = inActionInfo.payload.settings.icon || null;
+				const iconBox = document.getElementById("icon");
+				let icon = inActionInfo.payload.settings.icon || null;
 				iconRow(iconBox, () => icon, (u) => { icon = u; }, () => update());
 
 				const useDefault = document.getElementById("useDefault");

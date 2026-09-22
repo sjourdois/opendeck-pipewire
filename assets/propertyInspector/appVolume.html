@@ -17,39 +17,43 @@
 					websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
 				};
 
-			const app = document.getElementById("app");
-			const name = document.getElementById("name");
-			const step = document.getElementById("step");
+				const app = document.getElementById("app");
+				const name = document.getElementById("name");
+				const step = document.getElementById("step");
 				const stepValue = document.getElementById("stepValue");
 				const direction = document.getElementById("direction");
 				const mode = document.getElementById("mode");
 				const unmute = document.getElementById("unmute");
 				const mute = document.getElementById("mute");
-			const unavailable = document.getElementById("unavailable");
+				const unavailable = document.getElementById("unavailable");
 
-			step.value = settings.step ?? 5;
-			stepValue.innerText = step.value + "%";
-			mode.value = settings.mode ?? "up";
-			unmute.value = settings.unmute_color ?? "#3db36b";
-			mute.value = settings.mute_color ?? "#ff3b30";
-			unavailable.value = settings.unavailable_color ?? "#eab308";
+				step.value = settings.step ?? 5;
+				stepValue.innerText = step.value + "%";
+				mode.value = settings.mode ?? "up";
+				unmute.value = settings.unmute_color ?? "#3db36b";
+				mute.value = settings.mute_color ?? "#ff3b30";
+				unavailable.value = settings.unavailable_color ?? "#eab308";
 
-			const useName = document.getElementById("useName");
-			let customName = settings.name ?? "";
-			// Checked = use the application's own name; unchecked frees a custom label.
-			useName.checked = !customName;
-			const appDesc = () => (app.value && app.selectedOptions[0]) ? app.selectedOptions[0].text : "";
-			syncLabel = () => {
-				name.disabled = useName.checked;
-				name.value = useName.checked ? (appDesc() || current) : customName;
-			};
-			name.addEventListener("input", () => { customName = name.value; });
+				// The app the key controls: the user's live pick once they touch the
+				// picker, the saved setting until then.
+				let current = settings.app ?? "";
 
-			const limit = document.getElementById("limit");
-			limit.checked = settings.limit_100 ?? false;
+				const useName = document.getElementById("useName");
+				let customName = settings.name ?? "";
+				// Checked = use the application's own name; unchecked frees a custom label.
+				useName.checked = !customName;
+				const appDesc = () => (app.value && app.selectedOptions[0]) ? app.selectedOptions[0].text : "";
+				syncLabel = () => {
+					name.disabled = useName.checked;
+					name.value = useName.checked ? (appDesc() || current) : customName;
+				};
+				name.addEventListener("input", () => { customName = name.value; });
 
-			const iconBox = document.getElementById("icon");
-			let icon = settings.icon || null;
+				const limit = document.getElementById("limit");
+				limit.checked = settings.limit_100 ?? false;
+
+				const iconBox = document.getElementById("icon");
+				let icon = settings.icon || null;
 				iconRow(iconBox, () => icon, (u) => { icon = u; }, () => update());
 
 				const isKeypad = inActionInfo.payload.controller != "Encoder";
@@ -83,10 +87,9 @@
 				};
 
 				const warning = document.getElementById("warning");
-				let current = settings.app ?? "";
 				const renderApps = (apps, loaded) => {
-					// Preserve the user's live pick across re-renders (the list can be
-					// re-delivered), falling back to the saved setting on first load.
+					// Preserve the live pick across re-renders: the list can be
+					// re-delivered, which would otherwise wipe a just-picked app.
 					current = app.value || current;
 					app.innerHTML = "";
 					app.appendChild(new Option("— select application —", ""));
@@ -111,7 +114,6 @@
 					syncLabel();
 				};
 				renderApps([], false);
-				syncLabel();
 
 				websocket.onmessage = (event) => {
 					const data = JSON.parse(event.data);
