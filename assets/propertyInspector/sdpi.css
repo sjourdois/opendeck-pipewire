@@ -56,7 +56,7 @@ select {
 	-moz-appearance: none;
 	-o-appearance: none;
 	appearance: none;
-	background: url(../assets/caret.svg) no-repeat 97% center;
+	background: url(assets/caret.svg) no-repeat right 6px center;
 }
 
 input[type="button"],
@@ -209,7 +209,7 @@ button.sdpi-item-value {
 .sdpi-item-value > select {
 	margin-right: 13px;
 	margin-left: 4px;
-	padding: 0px 4px;
+	padding: 0px 16px 0px 4px;
 }
 
 .sdpi-item-child,
@@ -425,7 +425,6 @@ input[type="radio"] + label span {
 input[type="radio"]:checked + label span,
 input[type="checkbox"]:checked + label span {
 	background-color: #77f;
-	background-image: url(./check.svg);
 	background-repeat: no-repeat;
 	background-position: center center;
 	border: 1px solid rgb(0, 0, 0, 0.4);
@@ -439,7 +438,7 @@ input[type="checkbox"]:active + label span {
 }
 
 input[type="radio"]:checked + label span {
-	background-image: url(../assets/rcheck.svg);
+	background-image: url(assets/rcheck.svg);
 }
 
 input[type="range"] {

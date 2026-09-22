@@ -42,6 +42,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on a 128×128 canvas, rather than in the plugin: the `image` crate and its 18
   transitive crates are gone, and an icon no longer crosses the websocket at
   full resolution on every volume tick.
+- The property inspectors' dropdowns and radio buttons show their indicators
+  again: the vendored stylesheet had pointed at `caret.svg` and `rcheck.svg`
+  since the initial commit, and neither file was ever in the repo. A dropdown
+  set `appearance: none` and then had nothing to draw its arrow with, and a
+  selected radio was a blue square with no dot.
 - The released bundle is assembled from all of `assets/`, the way a dev build
   already was, instead of naming each directory — which had left the dial
   layout out of it.
