@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1]
+
 ### Fixed
 
 - **Output Device: stop overwriting the key image you chose in OpenDeck**
@@ -115,7 +117,8 @@ dedicated Mute action), and **no Node.js or Wine** at runtime.
 - GPL-3.0-or-later license, CI (fmt + clippy + build) and a release workflow that
   bundles the `.sdPlugin` for x86_64 and aarch64 Linux.
 
-[Unreleased]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.1.0...v0.1.1
