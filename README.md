@@ -44,6 +44,13 @@ aggregated across its streams.
 The Device and Volume keys **title** themselves with the current default device by
 default, and take a custom title from the property inspector (blank to clear).
 
+The **Output Device** key leaves its image to OpenDeck — the action's icon, or one
+you picked in OpenDeck's own key editor — until the property inspector asks for an
+icon only the plugin can pick: a per-device icon, an icon for when the key is
+inactive, or the greyed-out look of *Disable*. From that point the plugin draws the
+key, and OpenDeck's image for it is lost: the volume actions, which draw a live
+level bar, own their key image the same way.
+
 Every volume action's **bar colours** (unmuted and muted) are configurable in the
 property inspector. When muted, a keypad key gets a bold diagonal slash in the mute
 colour; on a Stream Deck+ touchstrip (which can't draw the slash) the value and bar

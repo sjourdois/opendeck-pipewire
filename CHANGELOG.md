@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Output Device: stop overwriting the key image you chose in OpenDeck**
+  ([#2](https://github.com/sjourdois/opendeck-pipewire/issues/2)). OpenDeck keeps a
+  plugin-pushed image in the very slot its own image picker writes to, so the key
+  pushing its built-in icon on every redraw silently undid the picture you had just
+  set. The key now leaves its image alone unless the property inspector asks for an
+  icon only the plugin can pick — a per-device icon, an icon for when the key is
+  inactive, or the greyed-out look of *Disable*.
+
 ## [0.3.0]
 
 ### Added
