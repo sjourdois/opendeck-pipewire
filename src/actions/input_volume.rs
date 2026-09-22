@@ -8,6 +8,7 @@ use crate::color::BarColors;
 use crate::command::Command;
 use crate::pw::{PwHandle, SinkDesc};
 use crate::refresh::Refresher;
+use crate::ui::VolumeUi;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -23,6 +24,9 @@ pub struct InputVolumeSettings {
 	/// User-configurable level-bar colours (unmuted / muted).
 	#[serde(flatten)]
 	pub colors: BarColors,
+	/// Custom icon and 100%-limit.
+	#[serde(flatten)]
+	pub ui: VolumeUi,
 }
 
 impl Default for InputVolumeSettings {
@@ -33,6 +37,7 @@ impl Default for InputVolumeSettings {
 			step: 5,
 			mode: super::KeyMode::Up,
 			colors: BarColors::default(),
+			ui: VolumeUi::default(),
 		}
 	}
 }
@@ -118,7 +123,8 @@ impl Action for InputVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_input(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings);
+		crate::display::encoder_layout(instance).await?;
+		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
 		self.render(instance, settings, vol, mute).await
 	}
 
@@ -137,7 +143,7 @@ impl Action for InputVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_input(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings);
+		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
 		self.render(instance, settings, vol, mute).await
 	}
 
@@ -156,12 +162,14 @@ impl Action for InputVolumeAction {
 }
 
 impl InputVolumeAction {
-	fn state(&self, settings: &InputVolumeSettings) -> (f32, bool) {
+	/// Live (volume_cubic, mute) of the configured source, or `None` when no
+	/// source is configured or it isn't currently available.
+	fn state(&self, settings: &InputVolumeSettings) -> Option<(f32, bool)> {
 		settings
 			.source
 			.as_deref()
+			.filter(|s| !s.is_empty())
 			.and_then(|s| self.pw.source_state(s))
-			.unwrap_or((0.0, false))
 	}
 
 	async fn adjust(
@@ -179,9 +187,10 @@ impl InputVolumeAction {
 			self.pw
 				.send(Command::SetSourceMute(source.to_owned(), Some(false)));
 		}
+		let delta = settings.ui.limit_delta(cur, delta_cubic);
 		self.pw
-			.send(Command::AdjustSourceVolume(source.to_owned(), delta_cubic));
-		let next = (cur + delta_cubic).clamp(0.0, 1.5);
+			.send(Command::AdjustSourceVolume(source.to_owned(), delta));
+		let next = (cur + delta).clamp(0.0, settings.ui.max_cubic());
 		self.render(instance, settings, next, false).await
 	}
 
@@ -208,12 +217,17 @@ impl InputVolumeAction {
 		volume_cubic: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
+		// `known` re-resolves the live state so a source that vanished (or was
+		// never configured) renders "n/a" instead of a stale level.
+		let known = self.state(settings).is_some();
 		crate::display::input(
 			instance,
 			&label(settings, &self.pw),
+			known,
 			volume_cubic,
 			mute,
 			&settings.colors,
+			&settings.ui,
 		)
 		.await
 	}

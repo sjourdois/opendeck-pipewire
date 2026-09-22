@@ -10,6 +10,7 @@ use crate::color::BarColors;
 use crate::command::Command;
 use crate::pw::PwHandle;
 use crate::refresh::Refresher;
+use crate::ui::VolumeUi;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -24,6 +25,9 @@ pub struct VolumeSettings {
 	/// User-configurable level-bar colours (unmuted / muted).
 	#[serde(flatten)]
 	pub colors: BarColors,
+	/// Custom icon and 100%-limit.
+	#[serde(flatten)]
+	pub ui: VolumeUi,
 }
 
 impl Default for VolumeSettings {
@@ -33,6 +37,7 @@ impl Default for VolumeSettings {
 			mode: super::KeyMode::Up,
 			title: None,
 			colors: BarColors::default(),
+			ui: VolumeUi::default(),
 		}
 	}
 }
@@ -113,10 +118,8 @@ impl Action for VolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		self.refresher
-			.set_colors(&instance.instance_id, &settings.colors);
-		self.refresher
-			.set_default_title(&instance.instance_id, settings.title.clone());
+		self.refresher.set_volume(&instance.instance_id, settings);
+		crate::display::encoder_layout(instance).await?;
 		self.refresh(instance, settings).await?;
 		crate::display::title(instance, &resolve_title(&settings.title, &self.pw)).await
 	}
@@ -126,8 +129,7 @@ impl Action for VolumeAction {
 		instance: &Instance,
 		_settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		self.refresher.forget_colors(&instance.instance_id);
-		self.refresher.forget_default_title(&instance.instance_id);
+		self.refresher.forget_volume(&instance.instance_id);
 		Ok(())
 	}
 
@@ -136,10 +138,7 @@ impl Action for VolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
-		self.refresher
-			.set_colors(&instance.instance_id, &settings.colors);
-		self.refresher
-			.set_default_title(&instance.instance_id, settings.title.clone());
+		self.refresher.set_volume(&instance.instance_id, settings);
 		self.refresh(instance, settings).await?;
 		crate::display::title(instance, &resolve_title(&settings.title, &self.pw)).await
 	}
@@ -153,10 +152,13 @@ impl VolumeAction {
 		settings: &VolumeSettings,
 		delta_cubic: f32,
 	) -> OpenActionResult<()> {
-		if self.pw.default_sink_snapshot().mute {
+		let snap = self.pw.default_sink_snapshot();
+		if snap.mute {
 			self.pw.send(Command::SetMute(Some(false)));
 		}
-		self.pw.send(Command::AdjustVolume(delta_cubic));
+		self.pw.send(Command::AdjustVolume(
+			settings.ui.limit_delta(snap.volume_cubic, delta_cubic),
+		));
 		self.refresh(instance, settings).await
 	}
 
@@ -172,10 +174,12 @@ impl VolumeAction {
 		self.pw.send(Command::SetMute(Some(target)));
 		crate::display::volume(
 			instance,
+			&resolve_title(&settings.title, &self.pw),
 			snap.known,
 			snap.volume_cubic,
 			target,
 			&settings.colors,
+			&settings.ui,
 		)
 		.await
 	}
@@ -189,10 +193,12 @@ impl VolumeAction {
 		let snap = self.pw.default_sink_snapshot();
 		crate::display::volume(
 			instance,
+			&resolve_title(&settings.title, &self.pw),
 			snap.known,
 			snap.volume_cubic,
 			snap.mute,
 			&settings.colors,
+			&settings.ui,
 		)
 		.await
 	}

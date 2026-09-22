@@ -6,66 +6,145 @@
 //! a pushed image overwrites the user's for good.
 //! On an **Encoder** (Stream Deck+ dial) the volume actions push the
 //! value + level bar of the `$B1` layout via `setFeedback` (see [`crate::render`]);
-//! the icon stays the dial's own OpenDeck configuration. The device/app volume
-//! actions also push their resolved label as the title (so the dial names its
-//! target, as the keypad image does); the default sink/mic actions leave the
-//! title to OpenDeck. Mute is a `set_state`, and the device pickers set a default
-//! title. See the `encoder-feedback-model` notes.
+//! a user-configured icon is sent as the touchstrip `icon`, otherwise the dial
+//! keeps its own OpenDeck icon. The device/app volume actions also push their
+//! resolved label as the title (so the dial names its target, as the keypad
+//! image does); the default sink/mic actions leave the title to OpenDeck. Mute
+//! is a `set_state`, and the device pickers set a default title. See the
+//! `encoder-feedback-model` notes.
 //!
 //! Actions and the out-of-band [`crate::refresh`] task share one path per action.
 
 use openaction::*;
 use serde_json::json;
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
 
 use crate::color::BarColors;
 use crate::render;
+use crate::render::dial_icon;
+use crate::ui::VolumeUi;
 
 fn is_encoder(instance: &Instance) -> bool {
 	instance.controller == "Encoder"
 }
 
-/// Render a volume-style surface: the `$B1` value+bar on an encoder touchstrip, or
-/// an SVG key image on a keypad (`keypad` builds it lazily, skipped on encoders).
-/// `known == false` shows a "—" placeholder on the keypad.
-async fn bar(
-	instance: &Instance,
-	title: &str,
+/// The `$B1`-based touchstrip layout with a larger title font, shipped in
+/// `assets/layouts/`. Applied at runtime (the manifest keeps `$B1` as a
+/// fallback for older OpenDeck releases), so existing dials pick it up without
+/// being re-added.
+const VOLUME_LAYOUT: &str = "layouts/volume.json";
+
+/// Switch an encoder to the volume layout. No-op on keypads. Call on
+/// `will_appear`; the layout persists for the instance afterwards.
+pub async fn encoder_layout(instance: &Instance) -> OpenActionResult<()> {
+	if is_encoder(instance) {
+		instance
+			.set_feedback_layout(VOLUME_LAYOUT.to_owned())
+			.await?;
+	}
+	Ok(())
+}
+
+/// Everything [`bar`] needs to draw a volume-style surface.
+struct BarSurface<'a> {
+	title: &'a str,
 	known: bool,
 	volume_cubic: f32,
 	muted: bool,
-	colors: &BarColors,
+	colors: &'a BarColors,
+	ui: &'a VolumeUi,
+}
+
+/// Last preview (state icon source + text) pushed per instance, so unchanged
+/// previews aren't re-sent: every resend would refresh the UI and mark the
+/// profile stale in OpenDeck.
+type PreviewState = (Option<String>, String);
+static PREVIEW: LazyLock<Mutex<HashMap<String, PreviewState>>> =
+	LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Render a volume-style surface: the `$B1` value+bar on an encoder touchstrip, or
+/// an SVG key image on a keypad (`keypad` builds it lazily, skipped on encoders).
+/// `known == false` shows a yellow "n/a" over a yellow bar (the stream exists but
+/// isn't currently available).
+async fn bar(
+	instance: &Instance,
+	surface: &BarSurface<'_>,
 	keypad: impl FnOnce() -> String,
 ) -> OpenActionResult<()> {
 	if is_encoder(instance) {
-		// The touchstrip shows the dial's own OpenDeck icon; we push the live
-		// value + level bar and the `title` (the resolved surface label — custom
-		// label or device name — mirroring what the keypad draws in its image).
+		// The touchstrip shows the value + level bar and the `title` (the resolved
+		// surface label — custom label or device name — mirroring what the keypad
+		// draws in its image); a configured icon overrides the dial icon.
 		instance
 			.set_feedback(&render::bar_feedback(
-				title,
-				known,
-				volume_cubic,
-				muted,
-				colors,
+				surface.title,
+				surface.known,
+				surface.volume_cubic,
+				surface.muted,
+				surface.colors,
+				surface.ui.icon(),
 			))
+			.await?;
+		// The OpenDeck window preview doesn't render feedback values, so mirror
+		// the icon + label into the state for a recognizable dial preview. The
+		// state text doubles as the strip title (OpenDeck prefers it over the
+		// feedback title), so it stays a single clean label: the value already
+		// has its own touchstrip slot, and a newline would render as tofu
+		// there (Noto has no U+000A glyph).
+		let preview = surface.title.to_owned();
+		let icon = surface.ui.icon().map(str::to_owned);
+		let changed = PREVIEW
+			.lock()
+			.unwrap()
+			.get(&instance.instance_id)
+			.cloned()
+			.is_none_or(|last| last != (icon.clone(), preview.clone()));
+		if changed {
+			instance
+				.set_image(icon.as_deref().map(dial_icon), None)
+				.await?;
+			instance.set_title(Some(preview.clone()), None).await?;
+			PREVIEW
+				.lock()
+				.unwrap()
+				.insert(instance.instance_id.clone(), (icon, preview));
+		}
+		Ok(())
+	} else if !surface.known {
+		instance
+			.set_image(
+				Some(render::unavailable_key(surface.colors, surface.ui)),
+				None,
+			)
 			.await
-	} else if !known {
-		instance.set_title(Some("—"), None).await
 	} else {
 		instance.set_image(Some(keypad()), None).await
 	}
 }
 
-/// Default-sink / master volume. `known == false` when there is no default sink yet.
+/// Default-sink / master volume. `label` is the resolved surface text — the
+/// user's custom title, else the current default output's name — shown as the
+/// encoder title and preview. `known == false` when there is no default sink yet.
 pub async fn volume(
 	instance: &Instance,
+	label: &str,
 	known: bool,
 	vol: f32,
 	muted: bool,
 	colors: &BarColors,
+	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
-	bar(instance, "", known, vol, muted, colors, || {
-		render::volume_key(vol, muted, colors)
+	let surface = BarSurface {
+		title: label,
+		known,
+		volume_cubic: vol,
+		muted,
+		colors,
+		ui,
+	};
+	bar(instance, &surface, || {
+		render::volume_key(vol, muted, colors, ui)
 	})
 	.await
 }
@@ -73,45 +152,77 @@ pub async fn volume(
 /// Default-source / mic volume (same surface as [`volume`]).
 pub async fn mic(
 	instance: &Instance,
+	label: &str,
 	known: bool,
 	vol: f32,
 	muted: bool,
 	colors: &BarColors,
+	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
-	bar(instance, "", known, vol, muted, colors, || {
-		render::volume_key(vol, muted, colors)
+	let surface = BarSurface {
+		title: label,
+		known,
+		volume_cubic: vol,
+		muted,
+		colors,
+		ui,
+	};
+	bar(instance, &surface, || {
+		render::volume_key(vol, muted, colors, ui)
 	})
 	.await
 }
 
 /// A specific output device's volume. `label` is the resolved surface text — the
 /// user's custom label, else the device's friendly name — shown both as the keypad
-/// image text and as the encoder title.
+/// image text and as the encoder title. `known == false` when no device is
+/// configured or it isn't currently available.
 pub async fn device(
 	instance: &Instance,
 	label: &str,
+	known: bool,
 	vol: f32,
 	muted: bool,
 	colors: &BarColors,
+	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
-	bar(instance, label, true, vol, muted, colors, || {
-		render::label_bar_key(label, vol, muted, colors)
+	let surface = BarSurface {
+		title: label,
+		known,
+		volume_cubic: vol,
+		muted,
+		colors,
+		ui,
+	};
+	bar(instance, &surface, || {
+		render::label_bar_key(label, vol, muted, colors, ui)
 	})
 	.await
 }
 
 /// A specific input device's volume. `label` is the resolved surface text — the
 /// user's custom label, else the device's friendly name — shown both as the keypad
-/// image text and as the encoder title.
+/// image text and as the encoder title. `known == false` when no input is
+/// configured or it isn't currently available.
 pub async fn input(
 	instance: &Instance,
 	label: &str,
+	known: bool,
 	vol: f32,
 	muted: bool,
 	colors: &BarColors,
+	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
-	bar(instance, label, true, vol, muted, colors, || {
-		render::label_bar_key(label, vol, muted, colors)
+	let surface = BarSurface {
+		title: label,
+		known,
+		volume_cubic: vol,
+		muted,
+		colors,
+		ui,
+	};
+	bar(instance, &surface, || {
+		render::label_bar_key(label, vol, muted, colors, ui)
 	})
 	.await
 }
@@ -161,19 +272,55 @@ pub async fn title(instance: &Instance, text: &str) -> OpenActionResult<()> {
 	}
 }
 
-/// The App Volume surface: the chosen application's name with its live level bar
-/// (same surface as [`device`]). `None` = no app chosen yet, shown as a
-/// placeholder; a chosen app that isn't currently playing shows an empty bar.
+/// The App Volume surface: the resolved label (custom label, else the
+/// application's name) with its live level bar (same surface as [`device`]).
+/// No app chosen, or a chosen app that isn't currently playing, shows "n/a"
+/// with a yellow bar.
 pub async fn app(
 	instance: &Instance,
-	app: Option<&str>,
+	label: &str,
+	known: bool,
 	vol: f32,
 	muted: bool,
 	colors: &BarColors,
+	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
-	let label = app.unwrap_or("App");
-	bar(instance, label, app.is_some(), vol, muted, colors, || {
-		render::label_bar_key(label, vol, muted, colors)
+	let surface = BarSurface {
+		title: label,
+		known,
+		volume_cubic: vol,
+		muted,
+		colors,
+		ui,
+	};
+	bar(instance, &surface, || {
+		render::label_bar_key(label, vol, muted, colors, ui)
 	})
 	.await
+}
+
+#[cfg(test)]
+mod tests {
+	/// The shipped dial layout must stay `$B1`-shaped (same item keys, so the
+	/// `setFeedback` payloads keep working) with a larger title that doesn't
+	/// overlap the rows below it.
+	#[test]
+	fn volume_layout_matches_b1_shape_with_bigger_title() {
+		let raw = include_str!("../assets/layouts/volume.json");
+		let v: serde_json::Value = serde_json::from_str(raw).unwrap();
+		let items = v["items"].as_array().unwrap();
+		let keys: Vec<&str> = items.iter().map(|i| i["key"].as_str().unwrap()).collect();
+		assert_eq!(keys, ["title", "icon", "value", "indicator"]);
+		let title = &items[0];
+		assert_eq!(title["font"]["size"], serde_json::json!(24));
+		let rect = title["rect"].as_array().unwrap();
+		let (x, y, w, h) = (
+			rect[0].as_u64().unwrap(),
+			rect[1].as_u64().unwrap(),
+			rect[2].as_u64().unwrap(),
+			rect[3].as_u64().unwrap(),
+		);
+		assert!(x + w <= 200 && y + h <= 100);
+		assert!(y + h <= 40); // icon/value rows start at y=40
+	}
 }

@@ -18,8 +18,9 @@ use openaction::*;
 use crate::actions::app_volume::{self, AppVolumeSettings};
 use crate::actions::device_volume::{self, DeviceVolumeSettings};
 use crate::actions::input_volume::{self, InputVolumeSettings};
+use crate::actions::mic_volume::{self, MicVolumeSettings};
 use crate::actions::output::{self, OutputSettings};
-use crate::color::BarColors;
+use crate::actions::volume::{self, VolumeSettings};
 use crate::pw::PwHandle;
 
 /// Shared, cheaply-cloneable store of the per-instance settings needed to redraw
@@ -29,16 +30,13 @@ pub struct Refresher {
 	device: Arc<Mutex<HashMap<String, DeviceVolumeSettings>>>,
 	input: Arc<Mutex<HashMap<String, InputVolumeSettings>>>,
 	app: Arc<Mutex<HashMap<String, AppVolumeSettings>>>,
+	/// Default sink/source volume settings (icon, font size, colours…), so an
+	/// out-of-band redraw keeps the instance's appearance.
+	volume: Arc<Mutex<HashMap<String, VolumeSettings>>>,
+	mic: Arc<Mutex<HashMap<String, MicVolumeSettings>>>,
 	/// Output-toggle settings, so its key can reflect an out-of-band default-sink
 	/// change (another app, wpctl, media keys…) — active/greyed and which sink.
 	output: Arc<Mutex<HashMap<String, OutputSettings>>>,
-	/// Bar colours of the default sink/source volume actions (which otherwise
-	/// carry no per-instance settings), so their custom colours survive an
-	/// out-of-band redraw.
-	default_colors: Arc<Mutex<HashMap<String, BarColors>>>,
-	/// Custom title (or `None` = show the current default device) of the default
-	/// sink/source volume actions, so their title survives an out-of-band redraw.
-	default_titles: Arc<Mutex<HashMap<String, Option<String>>>>,
 }
 
 impl Refresher {
@@ -86,26 +84,26 @@ impl Refresher {
 		self.output.lock().unwrap().remove(instance_id);
 	}
 
-	pub fn set_colors(&self, instance_id: &str, colors: &BarColors) {
-		self.default_colors
+	pub fn set_volume(&self, instance_id: &str, settings: &VolumeSettings) {
+		self.volume
 			.lock()
 			.unwrap()
-			.insert(instance_id.to_owned(), colors.clone());
+			.insert(instance_id.to_owned(), settings.clone());
 	}
 
-	pub fn forget_colors(&self, instance_id: &str) {
-		self.default_colors.lock().unwrap().remove(instance_id);
+	pub fn forget_volume(&self, instance_id: &str) {
+		self.volume.lock().unwrap().remove(instance_id);
 	}
 
-	pub fn set_default_title(&self, instance_id: &str, title: Option<String>) {
-		self.default_titles
+	pub fn set_mic(&self, instance_id: &str, settings: &MicVolumeSettings) {
+		self.mic
 			.lock()
 			.unwrap()
-			.insert(instance_id.to_owned(), title);
+			.insert(instance_id.to_owned(), settings.clone());
 	}
 
-	pub fn forget_default_title(&self, instance_id: &str) {
-		self.default_titles.lock().unwrap().remove(instance_id);
+	pub fn forget_mic(&self, instance_id: &str) {
+		self.mic.lock().unwrap().remove(instance_id);
 	}
 }
 
@@ -113,30 +111,24 @@ impl Refresher {
 pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 	use crate::display;
 
-	let default_colors = refresher.default_colors.lock().unwrap().clone();
-	let colors_for = |inst: &Instance| {
-		default_colors
-			.get(&inst.instance_id)
-			.cloned()
-			.unwrap_or_default()
-	};
-	let default_titles = refresher.default_titles.lock().unwrap().clone();
-	let title_for = |inst: &Instance| default_titles.get(&inst.instance_id).cloned().flatten();
-
 	// Default sink volume (bar) + title (current output device, or a custom title).
 	let sink = pw.default_sink_snapshot();
-	for inst in visible_instances(crate::actions::volume::VolumeAction::UUID).await {
-		if sink.known {
-			let _ = display::volume(
-				&inst,
-				true,
-				sink.volume_cubic,
-				sink.mute,
-				&colors_for(&inst),
-			)
-			.await;
-		}
-		let title = crate::actions::volume::resolve_title(&title_for(&inst), pw);
+	let volume = refresher.volume.lock().unwrap().clone();
+	for inst in visible_instances(volume::VolumeAction::UUID).await {
+		let Some(settings) = volume.get(&inst.instance_id) else {
+			continue;
+		};
+		let title = volume::resolve_title(&settings.title, pw);
+		let _ = display::volume(
+			&inst,
+			&title,
+			sink.known,
+			sink.volume_cubic,
+			sink.mute,
+			&settings.colors,
+			&settings.ui,
+		)
+		.await;
 		let _ = display::title(&inst, &title).await;
 	}
 
@@ -152,18 +144,22 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 
 	// Default source (mic) volume (bar) + title (current input device, or custom).
 	let source = pw.default_source_snapshot();
-	for inst in visible_instances(crate::actions::mic_volume::MicVolumeAction::UUID).await {
-		if source.known {
-			let _ = display::mic(
-				&inst,
-				true,
-				source.volume_cubic,
-				source.mute,
-				&colors_for(&inst),
-			)
-			.await;
-		}
-		let title = crate::actions::mic_volume::resolve_title(&title_for(&inst), pw);
+	let mic = refresher.mic.lock().unwrap().clone();
+	for inst in visible_instances(mic_volume::MicVolumeAction::UUID).await {
+		let Some(settings) = mic.get(&inst.instance_id) else {
+			continue;
+		};
+		let title = mic_volume::resolve_title(&settings.title, pw);
+		let _ = display::mic(
+			&inst,
+			&title,
+			source.known,
+			source.volume_cubic,
+			source.mute,
+			&settings.colors,
+			&settings.ui,
+		)
+		.await;
 		let _ = display::title(&inst, &title).await;
 	}
 	if source.known {
@@ -179,17 +175,16 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		let Some(settings) = device.get(&inst.instance_id) else {
 			continue;
 		};
-		let (vol, mute) = settings
-			.sink
-			.as_deref()
-			.and_then(|n| pw.sink_state(n))
-			.unwrap_or((0.0, false));
+		let live = settings.sink.as_deref().and_then(|n| pw.sink_state(n));
+		let (vol, mute) = live.unwrap_or((0.0, false));
 		let _ = display::device(
 			&inst,
 			&device_volume::label(settings, pw),
+			live.is_some(),
 			vol,
 			mute,
 			&settings.colors,
+			&settings.ui,
 		)
 		.await;
 	}
@@ -200,17 +195,16 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		let Some(settings) = input.get(&inst.instance_id) else {
 			continue;
 		};
-		let (vol, mute) = settings
-			.source
-			.as_deref()
-			.and_then(|n| pw.source_state(n))
-			.unwrap_or((0.0, false));
+		let live = settings.source.as_deref().and_then(|n| pw.source_state(n));
+		let (vol, mute) = live.unwrap_or((0.0, false));
 		let _ = display::input(
 			&inst,
 			&input_volume::label(settings, pw),
+			live.is_some(),
 			vol,
 			mute,
 			&settings.colors,
+			&settings.ui,
 		)
 		.await;
 	}
@@ -222,7 +216,17 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 			continue;
 		};
 		let target = settings.app.as_deref().filter(|s| !s.is_empty());
-		let (vol, mute) = target.and_then(|a| pw.app_state(a)).unwrap_or((0.0, false));
-		let _ = display::app(&inst, target, vol, mute, &settings.colors).await;
+		let live = target.and_then(|a| pw.app_state(a));
+		let (vol, mute) = live.unwrap_or((0.0, false));
+		let _ = display::app(
+			&inst,
+			&app_volume::label(settings),
+			live.is_some(),
+			vol,
+			mute,
+			&settings.colors,
+			&settings.ui,
+		)
+		.await;
 	}
 }

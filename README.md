@@ -52,13 +52,18 @@ key, and OpenDeck's image for it is lost: the volume actions, which draw a live
 level bar, own their key image the same way.
 
 Every volume action's **bar colours** (unmuted and muted) are configurable in the
-property inspector. When muted, a keypad key gets a bold diagonal slash in the mute
-colour; on a Stream Deck+ touchstrip (which can't draw the slash) the value and bar
-turn the mute colour instead.
+property inspector, along with a **custom icon** and an optional **limit to
+100%** (otherwise volume can boost to 150%). When the target stream is **unavailable** (no default device, a configured
+device that's gone, an app that isn't playing), the key and the encoder
+touchstrip show **"n/a" with a full bar in a configurable colour** (yellow by
+default). When muted, a keypad key gets a
+bold diagonal slash in the mute colour; on a Stream Deck+ touchstrip (which
+can't draw the slash) the value and bar turn the mute colour instead.
 
 On a **Stream Deck+**, the volume actions render an icon, a live percentage and a
 level bar on the touchstrip (via `setFeedback`), and every encoder action responds
-to dial rotation, dial press and touch.
+to dial rotation, dial press and touch. The dials switch to a shipped layout
+(`layouts/volume.json`, `$B1`-based with a larger title font) at runtime.
 
 Keys re-render **live** when a device's volume or mute changes outside the plugin
 (wpctl, pavucontrol, media keys, another app…), reflected through a PipeWire watch

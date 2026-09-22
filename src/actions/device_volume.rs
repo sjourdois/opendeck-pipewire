@@ -13,6 +13,7 @@ use crate::color::BarColors;
 use crate::command::Command;
 use crate::pw::{PwHandle, SinkDesc};
 use crate::refresh::Refresher;
+use crate::ui::VolumeUi;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -28,6 +29,9 @@ pub struct DeviceVolumeSettings {
 	/// User-configurable level-bar colours (unmuted / muted).
 	#[serde(flatten)]
 	pub colors: BarColors,
+	/// Custom icon and 100%-limit.
+	#[serde(flatten)]
+	pub ui: VolumeUi,
 }
 
 impl Default for DeviceVolumeSettings {
@@ -38,6 +42,7 @@ impl Default for DeviceVolumeSettings {
 			step: 5,
 			mode: super::KeyMode::Up,
 			colors: BarColors::default(),
+			ui: VolumeUi::default(),
 		}
 	}
 }
@@ -123,7 +128,8 @@ impl Action for DeviceVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_device(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings);
+		crate::display::encoder_layout(instance).await?;
+		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
 		self.render(instance, settings, vol, mute).await
 	}
 
@@ -142,7 +148,7 @@ impl Action for DeviceVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_device(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings);
+		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
 		self.render(instance, settings, vol, mute).await
 	}
 
@@ -161,12 +167,14 @@ impl Action for DeviceVolumeAction {
 }
 
 impl DeviceVolumeAction {
-	fn state(&self, settings: &DeviceVolumeSettings) -> (f32, bool) {
+	/// Live (volume_cubic, mute) of the configured sink, or `None` when no sink
+	/// is configured or it isn't currently available.
+	fn state(&self, settings: &DeviceVolumeSettings) -> Option<(f32, bool)> {
 		settings
 			.sink
 			.as_deref()
+			.filter(|s| !s.is_empty())
 			.and_then(|s| self.pw.sink_state(s))
-			.unwrap_or((0.0, false))
 	}
 
 	async fn adjust(
@@ -184,11 +192,12 @@ impl DeviceVolumeAction {
 			self.pw
 				.send(Command::SetSinkMute(sink.to_owned(), Some(false)));
 		}
+		let delta = settings.ui.limit_delta(cur, delta_cubic);
 		self.pw
-			.send(Command::AdjustSinkVolume(sink.to_owned(), delta_cubic));
+			.send(Command::AdjustSinkVolume(sink.to_owned(), delta));
 		// Optimistic render so the bar updates instantly (the real Props event
 		// will reconcile a moment later).
-		let next = (cur + delta_cubic).clamp(0.0, 1.5);
+		let next = (cur + delta).clamp(0.0, settings.ui.max_cubic());
 		self.render(instance, settings, next, false).await
 	}
 
@@ -214,12 +223,17 @@ impl DeviceVolumeAction {
 		volume_cubic: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
+		// `known` re-resolves the live state so a device that vanished (or was
+		// never configured) renders "n/a" instead of a stale level.
+		let known = self.state(settings).is_some();
 		crate::display::device(
 			instance,
 			&label(settings, &self.pw),
+			known,
 			volume_cubic,
 			mute,
 			&settings.colors,
+			&settings.ui,
 		)
 		.await
 	}
