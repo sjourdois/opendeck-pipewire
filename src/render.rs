@@ -63,6 +63,11 @@ fn text_y(with_icon: bool, plain: i32) -> i32 {
 	if with_icon { plain + 10 } else { plain }
 }
 
+/// The main text's size: shrunk to leave the icon room, `plain` otherwise.
+fn text_size(with_icon: bool, plain: i32) -> i32 {
+	if with_icon { 20 } else { plain }
+}
+
 /// A volume key: a big percentage with a horizontal level bar underneath.
 /// `volume_cubic` is on the 0..=1 (perceptual) scale; values above 1 are boost.
 pub fn volume_key(volume_cubic: f32, muted: bool, colors: &BarColors, ui: &VolumeUi) -> String {
@@ -70,13 +75,14 @@ pub fn volume_key(volume_cubic: f32, muted: bool, colors: &BarColors, ui: &Volum
 	let fill_w = (volume_cubic.clamp(0.0, 1.0) * 100.0).round() as i32;
 	let with_icon = ui.icon().is_some();
 	let y = text_y(with_icon, 66);
-	let (bar, label, label_color, size) = if muted {
-		(colors.mute(), "muted".to_owned(), "#999999", 20)
+	let (bar, label, label_color, plain_size) = if muted {
+		(colors.mute(), "muted".to_owned(), "#999999", 26)
 	} else if volume_cubic > 1.001 {
-		("#d8843d", format!("{pct}%"), "#ffffff", 20) // boosted (fixed warning colour)
+		("#d8843d", format!("{pct}%"), "#ffffff", 34) // boosted (fixed warning colour)
 	} else {
-		(colors.active(), format!("{pct}%"), "#ffffff", 20)
+		(colors.active(), format!("{pct}%"), "#ffffff", 34)
 	};
+	let size = text_size(with_icon, plain_size);
 
 	let svg = format!(
 		r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 128 128">
@@ -96,10 +102,11 @@ pub fn volume_key(volume_cubic: f32, muted: bool, colors: &BarColors, ui: &Volum
 pub fn unavailable_key(colors: &BarColors, ui: &VolumeUi) -> String {
 	let with_icon = ui.icon().is_some();
 	let y = text_y(with_icon, 66);
+	let size = text_size(with_icon, 34);
 	let na = colors.unavailable();
 	let svg = format!(
 		r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 128 128">
-{icon}<text x="64" y="{y}" font-family="sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">n/a</text>
+{icon}<text x="64" y="{y}" font-family="sans-serif" font-size="{size}" font-weight="bold" fill="#ffffff" text-anchor="middle">n/a</text>
 <rect x="14" y="92" width="100" height="12" rx="6" fill="#3a3a3a"/>
 <rect x="14" y="92" width="100" height="12" rx="6" fill="{na}"/>
 </svg>"##,
@@ -253,6 +260,42 @@ mod tests {
 		assert!(svg.contains(&format!(r#"href="{uri}""#)));
 		assert!(svg.contains(&format!(r#"xlink:href="{uri}""#)));
 		assert!(svg.contains(r#"preserveAspectRatio="xMidYMid meet""#));
+	}
+
+	#[test]
+	fn percentage_only_shrinks_for_the_icon() {
+		let plain = svg_of(&volume_key(
+			0.5,
+			false,
+			&BarColors::default(),
+			&ui_with(None),
+		));
+		assert!(plain.contains(r#"font-size="34""#));
+		let muted = svg_of(&volume_key(
+			0.5,
+			true,
+			&BarColors::default(),
+			&ui_with(None),
+		));
+		assert!(muted.contains(r#"font-size="26""#));
+		let with_icon = svg_of(&volume_key(
+			0.5,
+			false,
+			&BarColors::default(),
+			&ui_with(Some("data:image/png;base64,iVBORw0KGgo=")),
+		));
+		assert!(with_icon.contains(r#"font-size="20""#));
+	}
+
+	#[test]
+	fn unavailable_key_matches_the_percentage_size() {
+		let plain = svg_of(&unavailable_key(&BarColors::default(), &ui_with(None)));
+		assert!(plain.contains(r#"font-size="34""#));
+		let with_icon = svg_of(&unavailable_key(
+			&BarColors::default(),
+			&ui_with(Some("data:image/png;base64,iVBORw0KGgo=")),
+		));
+		assert!(with_icon.contains(r#"font-size="20""#));
 	}
 
 	#[test]

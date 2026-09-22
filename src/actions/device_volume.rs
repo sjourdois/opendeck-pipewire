@@ -129,8 +129,10 @@ impl Action for DeviceVolumeAction {
 	) -> OpenActionResult<()> {
 		self.refresher.set_device(&instance.instance_id, settings);
 		crate::display::encoder_layout(instance).await?;
-		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
-		self.render(instance, settings, vol, mute).await
+		let live = self.state(settings);
+		let (vol, mute) = live.unwrap_or((0.0, false));
+		self.render(instance, settings, live.is_some(), vol, mute)
+			.await
 	}
 
 	async fn will_disappear(
@@ -149,8 +151,10 @@ impl Action for DeviceVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_device(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
-		self.render(instance, settings, vol, mute).await
+		let live = self.state(settings);
+		let (vol, mute) = live.unwrap_or((0.0, false));
+		self.render(instance, settings, live.is_some(), vol, mute)
+			.await
 	}
 
 	async fn property_inspector_did_appear(
@@ -187,7 +191,8 @@ impl DeviceVolumeAction {
 		let Some(sink) = settings.sink.as_deref().filter(|s| !s.is_empty()) else {
 			return Ok(());
 		};
-		let (cur, mute) = self.pw.sink_state(sink).unwrap_or((0.0, false));
+		let live = self.pw.sink_state(sink);
+		let (cur, mute) = live.unwrap_or((0.0, false));
 		// Adjusting the volume of a muted device unmutes it.
 		if mute {
 			self.pw
@@ -199,7 +204,8 @@ impl DeviceVolumeAction {
 		// Optimistic render so the bar updates instantly (the real Props event
 		// will reconcile a moment later).
 		let next = (cur + delta).clamp(0.0, settings.ui.max_cubic());
-		self.render(instance, settings, next, false).await
+		self.render(instance, settings, live.is_some(), next, false)
+			.await
 	}
 
 	async fn toggle_mute(
@@ -211,8 +217,11 @@ impl DeviceVolumeAction {
 			self.pw.send(Command::SetSinkMute(sink.to_owned(), None));
 			// The command is applied asynchronously, so render the flipped state
 			// optimistically (the Props event will reconcile a moment later).
-			let (vol, mute) = self.pw.sink_state(sink).unwrap_or((0.0, false));
-			return self.render(instance, settings, vol, !mute).await;
+			let live = self.pw.sink_state(sink);
+			let (vol, mute) = live.unwrap_or((0.0, false));
+			return self
+				.render(instance, settings, live.is_some(), vol, !mute)
+				.await;
 		}
 		Ok(())
 	}
@@ -221,12 +230,10 @@ impl DeviceVolumeAction {
 		&self,
 		instance: &Instance,
 		settings: &DeviceVolumeSettings,
+		known: bool,
 		volume_cubic: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
-		// `known` re-resolves the live state so a device that vanished (or was
-		// never configured) renders "n/a" instead of a stale level.
-		let known = self.state(settings).is_some();
 		crate::display::device(
 			instance,
 			&label(settings, &self.pw),

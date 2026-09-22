@@ -124,8 +124,10 @@ impl Action for InputVolumeAction {
 	) -> OpenActionResult<()> {
 		self.refresher.set_input(&instance.instance_id, settings);
 		crate::display::encoder_layout(instance).await?;
-		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
-		self.render(instance, settings, vol, mute).await
+		let live = self.state(settings);
+		let (vol, mute) = live.unwrap_or((0.0, false));
+		self.render(instance, settings, live.is_some(), vol, mute)
+			.await
 	}
 
 	async fn will_disappear(
@@ -144,8 +146,10 @@ impl Action for InputVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_input(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
-		self.render(instance, settings, vol, mute).await
+		let live = self.state(settings);
+		let (vol, mute) = live.unwrap_or((0.0, false));
+		self.render(instance, settings, live.is_some(), vol, mute)
+			.await
 	}
 
 	async fn property_inspector_did_appear(
@@ -182,7 +186,8 @@ impl InputVolumeAction {
 		let Some(source) = settings.source.as_deref().filter(|s| !s.is_empty()) else {
 			return Ok(());
 		};
-		let (cur, mute) = self.pw.source_state(source).unwrap_or((0.0, false));
+		let live = self.pw.source_state(source);
+		let (cur, mute) = live.unwrap_or((0.0, false));
 		// Adjusting the volume of a muted device unmutes it.
 		if mute {
 			self.pw
@@ -192,7 +197,8 @@ impl InputVolumeAction {
 		self.pw
 			.send(Command::AdjustSourceVolume(source.to_owned(), delta));
 		let next = (cur + delta).clamp(0.0, settings.ui.max_cubic());
-		self.render(instance, settings, next, false).await
+		self.render(instance, settings, live.is_some(), next, false)
+			.await
 	}
 
 	async fn toggle_mute(
@@ -205,8 +211,11 @@ impl InputVolumeAction {
 				.send(Command::SetSourceMute(source.to_owned(), None));
 			// The command is applied asynchronously, so render the flipped state
 			// optimistically (the Props event will reconcile a moment later).
-			let (vol, mute) = self.pw.source_state(source).unwrap_or((0.0, false));
-			return self.render(instance, settings, vol, !mute).await;
+			let live = self.pw.source_state(source);
+			let (vol, mute) = live.unwrap_or((0.0, false));
+			return self
+				.render(instance, settings, live.is_some(), vol, !mute)
+				.await;
 		}
 		Ok(())
 	}
@@ -215,12 +224,10 @@ impl InputVolumeAction {
 		&self,
 		instance: &Instance,
 		settings: &InputVolumeSettings,
+		known: bool,
 		volume_cubic: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
-		// `known` re-resolves the live state so a source that vanished (or was
-		// never configured) renders "n/a" instead of a stale level.
-		let known = self.state(settings).is_some();
 		crate::display::input(
 			instance,
 			&label(settings, &self.pw),

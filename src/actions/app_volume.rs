@@ -121,8 +121,10 @@ impl Action for AppVolumeAction {
 	) -> OpenActionResult<()> {
 		self.refresher.set_app(&instance.instance_id, settings);
 		crate::display::encoder_layout(instance).await?;
-		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
-		self.render(instance, settings, vol, mute).await
+		let live = self.state(settings);
+		let (vol, mute) = live.unwrap_or((0.0, false));
+		self.render(instance, settings, live.is_some(), vol, mute)
+			.await
 	}
 
 	async fn will_disappear(
@@ -141,8 +143,10 @@ impl Action for AppVolumeAction {
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.set_app(&instance.instance_id, settings);
-		let (vol, mute) = self.state(settings).unwrap_or((0.0, false));
-		self.render(instance, settings, vol, mute).await
+		let live = self.state(settings);
+		let (vol, mute) = live.unwrap_or((0.0, false));
+		self.render(instance, settings, live.is_some(), vol, mute)
+			.await
 	}
 
 	async fn property_inspector_did_appear(
@@ -180,7 +184,8 @@ impl AppVolumeAction {
 		let Some(app) = self.app(settings) else {
 			return Ok(());
 		};
-		let (cur, mute) = self.pw.app_state(app).unwrap_or((0.0, false));
+		let live = self.pw.app_state(app);
+		let (cur, mute) = live.unwrap_or((0.0, false));
 		// Adjusting the volume of a muted app unmutes it.
 		if mute {
 			self.pw
@@ -192,7 +197,8 @@ impl AppVolumeAction {
 		// Optimistic render so the bar moves instantly (the real Props event will
 		// reconcile a moment later).
 		let next = (cur + delta).clamp(0.0, settings.ui.max_cubic());
-		self.render(instance, settings, next, false).await
+		self.render(instance, settings, live.is_some(), next, false)
+			.await
 	}
 
 	async fn toggle_mute(
@@ -206,21 +212,20 @@ impl AppVolumeAction {
 		self.pw.send(Command::SetAppMute(app.to_owned(), None));
 		// The command is applied asynchronously, so render the flipped state
 		// optimistically (the Props event will reconcile a moment later).
-		let (vol, mute) = self.pw.app_state(app).unwrap_or((0.0, false));
-		self.render(instance, settings, vol, !mute).await
+		let live = self.pw.app_state(app);
+		let (vol, mute) = live.unwrap_or((0.0, false));
+		self.render(instance, settings, live.is_some(), vol, !mute)
+			.await
 	}
 
 	async fn render(
 		&self,
 		instance: &Instance,
 		settings: &AppVolumeSettings,
+		known: bool,
 		vol: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
-		let app = self.app(settings);
-		// `known` re-resolves the live state so an app that stopped playing (or
-		// was never configured) renders "n/a" instead of a stale level.
-		let known = app.is_some_and(|a| self.pw.app_state(a).is_some());
 		crate::display::app(
 			instance,
 			&label(settings),
