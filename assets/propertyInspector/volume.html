@@ -100,6 +100,7 @@
 				// rotates for volume and presses to mute already.
 				const isKeypad = inActionInfo.payload.controller != "Encoder";
 				if (!isKeypad) document.getElementById("direction").style.display = "none";
+				if (!isKeypad) document.getElementById("iconNote").style.display = "";
 
 				// Step is irrelevant in Mute mode (keypad only) — hide it there.
 				const stepRow = document.getElementById("stepRow");
@@ -162,6 +163,12 @@
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Icon</div>
 				<div class="sdpi-item-value label-row" id="icon"></div>
+			</div>
+			<div id="iconNote" class="action-desc" style="display: none">
+				On a dial, the first icon set here hands the preview image over to the
+				plugin: OpenDeck gives no way to read its own back, so the picture you
+				chose there is gone for good. Clearing the icon leaves the last one in
+				place.
 			</div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Bar color</div>

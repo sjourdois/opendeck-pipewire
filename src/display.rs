@@ -7,11 +7,12 @@
 //! On an **Encoder** (Stream Deck+ dial) the volume actions push the
 //! value + level bar of the `$B1` layout via `setFeedback` (see [`crate::render`]);
 //! a user-configured icon is sent as the touchstrip `icon`, otherwise the dial
-//! keeps its own OpenDeck icon. The device/app volume actions also push their
-//! resolved label as the title (so the dial names its target, as the keypad
-//! image does); the default sink/mic actions leave the title to OpenDeck. Mute
-//! is a `set_state`, and the device pickers set a default title. See the
-//! `encoder-feedback-model` notes.
+//! keeps its own OpenDeck icon. The resolved label is mirrored into the dial's
+//! state so the OpenDeck window shows a recognizable preview, together with the
+//! icon when one is configured — and only then, since clearing a dial's image
+//! destroys OpenDeck's own as surely as overwriting it. Mute is a `set_state`,
+//! and the device pickers set a default title. See the `encoder-feedback-model`
+//! notes.
 //!
 //! Actions and the out-of-band [`crate::refresh`] task share one path per action.
 
@@ -22,7 +23,6 @@ use std::sync::{LazyLock, Mutex};
 
 use crate::color::BarColors;
 use crate::render;
-use crate::render::dial_icon;
 use crate::ui::VolumeUi;
 
 fn is_encoder(instance: &Instance) -> bool {
@@ -56,12 +56,24 @@ struct BarSurface<'a> {
 	ui: &'a VolumeUi,
 }
 
-/// Last preview (state icon source + text) pushed per instance, so unchanged
-/// previews aren't re-sent: every resend would refresh the UI and mark the
-/// profile stale in OpenDeck.
-type PreviewState = (Option<String>, String);
-static PREVIEW: LazyLock<Mutex<HashMap<String, PreviewState>>> =
+/// The dial preview pushed into an encoder's state: the icon (when the settings
+/// provide one) and the label.
+#[derive(PartialEq)]
+struct Preview {
+	icon: Option<String>,
+	title: String,
+}
+
+/// Last [`Preview`] pushed per instance, so an unchanged one isn't re-sent:
+/// every resend would refresh the UI and mark the profile stale in OpenDeck.
+/// Dropped by [`forget_preview`] when the instance goes away.
+static PREVIEW: LazyLock<Mutex<HashMap<String, Preview>>> =
 	LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Drop an instance's remembered dial preview, on `will_disappear`.
+pub fn forget_preview(instance_id: &str) {
+	PREVIEW.lock().unwrap().remove(instance_id);
+}
 
 /// Render a volume-style surface: the `$B1` value+bar on an encoder touchstrip, or
 /// an SVG key image on a keypad (`keypad` builds it lazily, skipped on encoders).
@@ -87,28 +99,35 @@ async fn bar(
 			))
 			.await?;
 		// The OpenDeck window preview doesn't render feedback values, so mirror
-		// the icon + label into the state for a recognizable dial preview. The
-		// state text doubles as the strip title (OpenDeck prefers it over the
-		// feedback title), so it stays a single clean label: the value already
-		// has its own touchstrip slot, and a newline would render as tofu
-		// there (Noto has no U+000A glyph).
-		let preview = surface.title.to_owned();
-		let icon = surface.ui.icon().map(str::to_owned);
+		// the label — and an icon, if the settings provide one — into the dial's
+		// state for a recognizable preview. The state text doubles as the strip
+		// title (OpenDeck prefers it over the feedback title), so it stays a
+		// single clean label: the value already has its own touchstrip slot, and
+		// a newline would render as tofu there (Noto has no U+000A glyph).
+		//
+		// The image is only ever *set*, never cleared: `set_image(None)` resets
+		// the dial to the action's default and takes OpenDeck's own picture with
+		// it, for good (see [`crate::actions::output`]).
+		let preview = Preview {
+			icon: surface.ui.icon().map(str::to_owned),
+			title: surface.title.to_owned(),
+		};
 		let changed = PREVIEW
 			.lock()
 			.unwrap()
 			.get(&instance.instance_id)
-			.cloned()
-			.is_none_or(|last| last != (icon.clone(), preview.clone()));
+			.is_none_or(|last| *last != preview);
 		if changed {
+			if let Some(icon) = preview.icon.as_deref() {
+				instance.set_image(Some(icon), None).await?;
+			}
 			instance
-				.set_image(icon.as_deref().map(dial_icon), None)
+				.set_title(Some(preview.title.clone()), None)
 				.await?;
-			instance.set_title(Some(preview.clone()), None).await?;
 			PREVIEW
 				.lock()
 				.unwrap()
-				.insert(instance.instance_id.clone(), (icon, preview));
+				.insert(instance.instance_id.clone(), preview);
 		}
 		Ok(())
 	} else if !surface.known {

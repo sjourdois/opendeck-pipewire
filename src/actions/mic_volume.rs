@@ -127,6 +127,7 @@ impl Action for MicVolumeAction {
 		_settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.forget_mic(&instance.instance_id);
+		crate::display::forget_preview(&instance.instance_id);
 		Ok(())
 	}
 

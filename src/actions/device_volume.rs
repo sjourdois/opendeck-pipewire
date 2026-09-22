@@ -139,6 +139,7 @@ impl Action for DeviceVolumeAction {
 		_settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.forget_device(&instance.instance_id);
+		crate::display::forget_preview(&instance.instance_id);
 		Ok(())
 	}
 

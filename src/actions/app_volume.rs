@@ -131,6 +131,7 @@ impl Action for AppVolumeAction {
 		_settings: &Self::Settings,
 	) -> OpenActionResult<()> {
 		self.refresher.forget_app(&instance.instance_id);
+		crate::display::forget_preview(&instance.instance_id);
 		Ok(())
 	}
 
