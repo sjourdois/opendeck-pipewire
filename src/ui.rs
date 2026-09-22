@@ -12,6 +12,11 @@ pub struct VolumeUi {
 	/// Custom icon (data URI) picked in the property inspector. Shown at the top
 	/// of the keypad key image and sent as the encoder touchstrip `icon` in
 	/// `setFeedback` (ignored by layouts that don't support it).
+	///
+	/// The picker fits it on a transparent 128×128 square and re-encodes it as
+	/// PNG (see `propertyInspector/icon.js`), so nothing here resizes or pads:
+	/// an icon is square and bounded by the time it reaches these settings. An
+	/// icon stored by an earlier version may be neither.
 	pub icon: Option<String>,
 	/// When true, volume increases through this action stop at 100% instead of
 	/// allowing the +50% boost range.

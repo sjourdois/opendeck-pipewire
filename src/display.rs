@@ -4,15 +4,16 @@
 //! except the Output Device key, whose image is OpenDeck's own until the settings
 //! ask for an icon the plugin has to draw (see [`crate::actions::output`]), since
 //! a pushed image overwrites the user's for good.
-//! On an **Encoder** (Stream Deck+ dial) the volume actions push the
-//! value + level bar of the `$B1` layout via `setFeedback` (see [`crate::render`]);
+//! On an **Encoder** (Stream Deck+ dial) the volume actions push the value +
+//! level bar of the touchstrip layout via `setFeedback` (see [`crate::render`]);
 //! a user-configured icon is sent as the touchstrip `icon`, otherwise the dial
 //! keeps its own OpenDeck icon. The resolved label is mirrored into the dial's
-//! state so the OpenDeck window shows a recognizable preview, together with the
-//! icon when one is configured — and only then, since clearing a dial's image
-//! destroys OpenDeck's own as surely as overwriting it. Mute is a `set_state`,
-//! and the device pickers set a default title. See the `encoder-feedback-model`
-//! notes.
+//! state so the OpenDeck window shows a recognizable preview — which does take
+//! the dial's title over from OpenDeck's own editor, the property inspector's
+//! label field deciding it from then on. The icon goes with it only when one is
+//! configured, and only ever as a value: clearing a dial's image destroys
+//! OpenDeck's own as surely as overwriting it. Mute is a `set_state`, and the
+//! device pickers set a default title. See the `encoder-feedback-model` notes.
 //!
 //! Actions and the out-of-band [`crate::refresh`] task share one path per action.
 
@@ -29,10 +30,11 @@ fn is_encoder(instance: &Instance) -> bool {
 	instance.controller == "Encoder"
 }
 
-/// The `$B1`-based touchstrip layout with a larger title font, shipped in
-/// `assets/layouts/`. Applied at runtime (the manifest keeps `$B1` as a
-/// fallback for older OpenDeck releases), so existing dials pick it up without
-/// being re-added.
+/// The `$B1`-shaped touchstrip layout with a larger title font, shipped in
+/// `assets/layouts/`. Applied at runtime rather than declared per action, so a
+/// dial already on a profile picks it up without being re-added; the manifest
+/// still declares plain `$B1`, which is what a dial keeps if this call goes
+/// unhonoured. Tested against OpenDeck 2.14.0, which logs no complaint.
 const VOLUME_LAYOUT: &str = "layouts/volume.json";
 
 /// Switch an encoder to the volume layout. No-op on keypads. Call on

@@ -41,8 +41,12 @@ encoder the dial always rotates for volume and presses to mute, regardless of mo
 The **App Volume** key/dial shows a live level bar for the chosen application,
 aggregated across its streams.
 
-The Device and Volume keys **title** themselves with the current default device by
-default, and take a custom title from the property inspector (blank to clear).
+Every volume action **labels** itself: Output and Input Volume with the current
+default device, the Device Volume and App Volume actions with their own target.
+Each takes a custom label from the property inspector instead. On a Stream Deck+
+dial that label is written to the dial's title too, so the OpenDeck window shows
+which target the dial drives — which means the plugin, not OpenDeck's dial editor,
+decides that title.
 
 The **Output Device** key leaves its image to OpenDeck — the action's icon, or one
 you picked in OpenDeck's own key editor — until the property inspector asks for an
@@ -52,7 +56,8 @@ key, and OpenDeck's image for it is lost: the volume actions, which draw a live
 level bar, own their key image the same way.
 
 Every volume action's **bar colours** (unmuted and muted) are configurable in the
-property inspector, along with a **custom icon** and an optional **limit to 100%**
+property inspector, along with a **custom icon** — fitted to a transparent 128×128
+square when you pick it, so nothing is stretched — and an optional **limit to 100%**
 (otherwise volume can boost to 150%). When muted, a keypad key gets a bold diagonal
 slash in the mute colour; on a Stream Deck+ touchstrip (which can't draw the slash)
 the value and bar turn the mute colour instead.
@@ -61,12 +66,16 @@ When the target stream is **unavailable** — no default device, a configured de
 that's gone, an app that isn't playing — the key and the encoder touchstrip show
 **"n/a" over a full bar** in a colour of its own (yellow by default).
 
-On a **Stream Deck+**, the volume actions render an icon, a live percentage and a
-level bar on the touchstrip (via `setFeedback`), and every encoder action responds
-to dial rotation, dial press and touch. The dials switch to a shipped layout
-(`layouts/volume.json`, `$B1`-based with a larger title font) at runtime. A dial's
-icon is the plugin's from the moment the property inspector sets one: as with the
-Output Device key, OpenDeck's own image for it is then lost.
+On a **Stream Deck+**, the volume actions render a live percentage and a level bar
+on the touchstrip (via `setFeedback`), beside whatever icon the dial carries, and
+every encoder action responds to dial rotation, dial press and touch. The dials
+switch to a shipped layout (`layouts/volume.json`, `$B1`-based with a larger title
+font) at runtime, so dials already on a profile pick it up without being re-added.
+
+A dial's **icon** is the plugin's from the moment the property inspector sets one:
+as with the Output Device key, OpenDeck's own image for it is then lost. Leaving it
+unset leaves your picture alone — the plugin only ever sets that image, never
+clears it.
 
 Keys re-render **live** when a device's volume or mute changes outside the plugin
 (wpctl, pavucontrol, media keys, another app…), reflected through a PipeWire watch
@@ -99,8 +108,9 @@ sinks — chosen automatically, including across live hardware-profile switches.
    ├── propertyInspector/       (from assets/)
    └── <target-triple>/bin/opendeck-pipewire
    ```
-   Everything but the binary is the contents of `assets/`, copied as-is.
-   e.g. the binary at `x86_64-unknown-linux-gnu/bin/opendeck-pipewire`.
+   Everything but the binary is the contents of `assets/`, copied as-is; the
+   binary goes at `<target-triple>/bin/opendeck-pipewire`, e.g.
+   `x86_64-unknown-linux-gnu/bin/opendeck-pipewire`.
 3. Copy that directory into `~/.config/opendeck/plugins/` and restart OpenDeck.
 
 > **Updating an installed plugin:** OpenDeck snapshots each action's definition

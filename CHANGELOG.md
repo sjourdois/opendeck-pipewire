@@ -32,6 +32,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **A dial's title is now the plugin's.** The preview writes the resolved label
+  into the dial's state, which is the same field OpenDeck's dial editor writes
+  to, and it is rewritten on every redraw — so 0.2.0's "keeping the dial's own
+  icon and title" no longer holds for the title. The property inspector's
+  Title / Label field decides it. The icon is untouched unless you set one
+  there.
 - The volume actions' icons are squared in the property inspector at pick time,
   on a 128×128 canvas, rather than in the plugin: the `image` crate and its 18
   transitive crates are gone, and an icon no longer crosses the websocket at

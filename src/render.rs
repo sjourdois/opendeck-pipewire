@@ -1,10 +1,10 @@
 //! On-the-fly visual feedback.
 //!
 //! Keypad buttons get a full 128×128 SVG key image via `set_image`. Encoders
-//! (Stream Deck+ dials) use the native `$B1` touchstrip layout, for which this
-//! module builds the `setFeedback` value+bar payload (see [`bar_feedback`]); the
-//! title stays the dial's own OpenDeck configuration unless the action resolves
-//! a label, and a user-configured icon is sent as the touchstrip `icon`.
+//! (Stream Deck+ dials) use the `$B1`-shaped touchstrip layout the plugin ships
+//! (see [`crate::display::encoder_layout`]), for which this module builds the
+//! `setFeedback` value+bar payload (see [`bar_feedback`]): the resolved label as
+//! the `title`, and a user-configured icon as the touchstrip `icon`.
 
 use base64::Engine;
 use serde_json::{Value, json};
@@ -46,8 +46,10 @@ fn mute_slash(muted: bool, color: &str) -> String {
 
 /// The user's custom icon (a data URI from the property inspector), drawn small
 /// at the top of the key image. Empty when no icon is configured. Both `href`
-/// (SVG2) and `xlink:href` (SVG1.1) are set so older renderers pick it up too;
-/// `preserveAspectRatio` keeps non-square images undistorted (letterboxed).
+/// (SVG2) and `xlink:href` (SVG1.1) are set so older renderers pick it up too.
+/// The picker squares new icons itself (see `propertyInspector/icon.js`), so
+/// `preserveAspectRatio` is what keeps an icon stored by an earlier version
+/// undistorted rather than stretched.
 fn icon_overlay(ui: &VolumeUi) -> String {
 	match ui.icon() {
 		Some(uri) => format!(
@@ -163,7 +165,7 @@ pub fn value_text(known: bool, volume_cubic: f32, muted: bool) -> String {
 	}
 }
 
-/// `setFeedback` for the `$B1` volume layout: the "NN%"/"muted" `value` and the
+/// `setFeedback` for the volume touchstrip layout: the "NN%"/"muted" `value` and the
 /// level `indicator` bar. A non-empty `title` (the surface label — a device/app
 /// name or the user's custom label) is sent too; otherwise the title is left to
 /// OpenDeck. `known == false` renders an "n/a" with a full bar in the
