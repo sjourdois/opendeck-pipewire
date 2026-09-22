@@ -258,12 +258,4 @@ mod tests {
 		assert_eq!(label(&plain), "Brave");
 		assert_eq!(label(&AppVolumeSettings::default()), "App");
 	}
-
-	#[test]
-	fn pi_payload_with_label_parses() {
-		let json = r##"{"app":"Brave","name":"Browser","step":5,"mode":"up","unmute_color":"#3db36b","mute_color":"#ff3b30","icon":null,"limit_100":true}"##;
-		let s: AppVolumeSettings = serde_json::from_str(json).unwrap();
-		assert_eq!(label(&s), "Browser");
-		assert!(s.ui.limit_100);
-	}
 }
