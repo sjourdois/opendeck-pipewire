@@ -52,18 +52,21 @@ key, and OpenDeck's image for it is lost: the volume actions, which draw a live
 level bar, own their key image the same way.
 
 Every volume action's **bar colours** (unmuted and muted) are configurable in the
-property inspector, along with a **custom icon** and an optional **limit to
-100%** (otherwise volume can boost to 150%). When the target stream is **unavailable** (no default device, a configured
-device that's gone, an app that isn't playing), the key and the encoder
-touchstrip show **"n/a" with a full bar in a configurable colour** (yellow by
-default). When muted, a keypad key gets a
-bold diagonal slash in the mute colour; on a Stream Deck+ touchstrip (which
-can't draw the slash) the value and bar turn the mute colour instead.
+property inspector, along with a **custom icon** and an optional **limit to 100%**
+(otherwise volume can boost to 150%). When muted, a keypad key gets a bold diagonal
+slash in the mute colour; on a Stream Deck+ touchstrip (which can't draw the slash)
+the value and bar turn the mute colour instead.
+
+When the target stream is **unavailable** — no default device, a configured device
+that's gone, an app that isn't playing — the key and the encoder touchstrip show
+**"n/a" over a full bar** in a colour of its own (yellow by default).
 
 On a **Stream Deck+**, the volume actions render an icon, a live percentage and a
 level bar on the touchstrip (via `setFeedback`), and every encoder action responds
 to dial rotation, dial press and touch. The dials switch to a shipped layout
-(`layouts/volume.json`, `$B1`-based with a larger title font) at runtime.
+(`layouts/volume.json`, `$B1`-based with a larger title font) at runtime. A dial's
+icon is the plugin's from the moment the property inspector sets one: as with the
+Output Device key, OpenDeck's own image for it is then lost.
 
 Keys re-render **live** when a device's volume or mute changes outside the plugin
 (wpctl, pavucontrol, media keys, another app…), reflected through a PipeWire watch
@@ -92,9 +95,11 @@ sinks — chosen automatically, including across live hardware-profile switches.
    fr.jourdois.pipewire.sdPlugin/
    ├── manifest.json            (from assets/)
    ├── icons/                   (from assets/)
+   ├── layouts/                 (from assets/)
    ├── propertyInspector/       (from assets/)
    └── <target-triple>/bin/opendeck-pipewire
    ```
+   Everything but the binary is the contents of `assets/`, copied as-is.
    e.g. the binary at `x86_64-unknown-linux-gnu/bin/opendeck-pipewire`.
 3. Copy that directory into `~/.config/opendeck/plugins/` and restart OpenDeck.
 
@@ -143,3 +148,9 @@ GPL-3.0-or-later — see [`LICENSE`](LICENSE). (OpenDeck is GPL-3.0-or-later; th
   [OpenAction API](https://openaction.amankhanna.me/) and
   [OpenDeck](https://github.com/nekename/OpenDeck) by Aman Khanna (nekename).
 - Inspiration: [CronusAK/Pulse-Audio-Stream-Deck-Plugin](https://github.com/CronusAK/Pulse-Audio-Stream-Deck-Plugin).
+
+## Contributors
+
+- [Maximilian Hildebrand (m10x)](https://github.com/m10x) — volume appearance
+  options, the unavailable state and dial previews
+  ([#1](https://github.com/sjourdois/opendeck-pipewire/pull/1)).

@@ -76,7 +76,7 @@ jobs:
       - name: Assemble .sdPlugin bundle
         run: |
           mkdir -p "$PLUGIN"
-          cp -r assets/manifest.json assets/icons assets/propertyInspector "$PLUGIN/"
+          cp -r assets/. "$PLUGIN/"
           cp -r bins/* "$PLUGIN/"
           chmod 755 "$PLUGIN"/*/bin/opendeck-pipewire
           zip -r "$PLUGIN.zip" "$PLUGIN"

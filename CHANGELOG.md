@@ -24,10 +24,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Larger dial titles**: the volume actions switch their encoder to a shipped
   `$B1`-based layout with a larger title font at runtime (no re-adding of
   buttons needed).
-- **Recognizable dial previews**: the OpenDeck window now shows the custom
-  icon plus the label for encoder instances (the preview doesn't render
-  touchstrip feedback values; the value keeps its own strip slot instead of
-  duplicating into the title).
+- **Recognizable dial previews**: the OpenDeck window shows the label — and the
+  custom icon, once one is set — for encoder instances, which the touchstrip
+  feedback values it doesn't render never gave it. Setting a dial's icon hands
+  its image to the plugin for good, as it does for the Output Device key, so
+  the property inspector says so and the plugin never pushes an empty one.
+
+### Changed
+
+- The volume actions' icons are squared in the property inspector at pick time,
+  on a 128×128 canvas, rather than in the plugin: the `image` crate and its 18
+  transitive crates are gone, and an icon no longer crosses the websocket at
+  full resolution on every volume tick.
+- The released bundle is assembled from all of `assets/`, the way a dev build
+  already was, instead of naming each directory — which had left the dial
+  layout out of it.
 
 ## [0.3.1]
 
