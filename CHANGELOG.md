@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0]
+
 ### Added
 
 - **Unavailable streams show "n/a" on a coloured bar**: when a volume target
@@ -33,18 +35,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the touchstrip still shows the device or app name, as before.
 
 ### Changed
+
 - The volume actions' icons are squared in the property inspector at pick time,
   on a 128×128 canvas, rather than in the plugin: the `image` crate and its 18
   transitive crates are gone, and an icon no longer crosses the websocket at
   full resolution on every volume tick.
-- The property inspectors' dropdowns and radio buttons show their indicators
-  again: the vendored stylesheet had pointed at `caret.svg` and `rcheck.svg`
-  since the initial commit, and neither file was ever in the repo. A dropdown
-  set `appearance: none` and then had nothing to draw its arrow with, and a
-  selected radio was a blue square with no dot.
 - The released bundle is assembled from all of `assets/`, the way a dev build
   already was, instead of naming each directory — which had left the dial
   layout out of it.
+
+### Fixed
+
+- **The property inspectors' dropdowns and radio buttons show their indicators.**
+  The vendored stylesheet had pointed at `caret.svg` and `rcheck.svg` since the
+  initial commit and neither file was ever in the repo, so every inspector 404'd
+  on load. A dropdown sets `appearance: none` and so had nothing at all to draw
+  its arrow with; a selected radio was a blue square with no dot.
 
 ## [0.3.1]
 
@@ -157,7 +163,8 @@ dedicated Mute action), and **no Node.js or Wine** at runtime.
 - GPL-3.0-or-later license, CI (fmt + clippy + build) and a release workflow that
   bundles the `.sdPlugin` for x86_64 and aarch64 Linux.
 
-[Unreleased]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sjourdois/opendeck-pipewire/compare/v0.1.1...v0.2.0

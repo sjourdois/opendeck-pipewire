@@ -1,6 +1,6 @@
 [package]
 name = "opendeck-pipewire"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Stephane Jourdois <stephane@jourdois.fr>"]
 license = "GPL-3.0-or-later"
 edition = "2024"
