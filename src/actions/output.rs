@@ -185,14 +185,29 @@ fn chosen(settings: &OutputSettings) -> Vec<&str> {
 		.collect()
 }
 
+/// Whether the plugin owns this key's image, rather than OpenDeck: true as soon
+/// as the settings configure an icon, or ask for the greyed-out `Disable` look.
+///
+/// It is all or nothing, because OpenDeck keeps a plugin-pushed image in the very
+/// slot its own image picker writes to, and gives no way to read it back: the
+/// first image the plugin pushes replaces the user's choice for good. So the key
+/// is left alone unless the settings ask for something only the plugin can draw.
+fn draws_image(settings: &OutputSettings) -> bool {
+	!settings.icons.is_empty()
+		|| settings.inactive_icon.is_some()
+		|| settings.when_inactive == WhenInactive::Disable
+}
+
 /// What the key should show, resolved from the live default and the settings.
 pub struct Surface {
 	/// The key title: the user's custom title, else the current default output's
 	/// name (what is actually active), else the "Output" placeholder.
 	pub title: String,
 	/// The key image (data URI): the active sink's custom icon, the inactive icon,
-	/// or the built-in output / greyed-output icon.
-	pub image: String,
+	/// or the built-in output / greyed-output icon — and `None` when the plugin
+	/// doesn't draw the key at all (see [`draws_image`]), leaving whatever image
+	/// OpenDeck holds for it, the action's own or one the user picked.
+	pub image: Option<String>,
 }
 
 /// Resolve the key surface for a set of output settings against the current
@@ -207,16 +222,22 @@ pub fn surface(settings: &OutputSettings, pw: &PwHandle) -> Surface {
 			.unwrap_or_else(|| "Output".to_owned()),
 	};
 	let active = is_active(settings, pw) || settings.when_inactive == WhenInactive::Cycle;
-	let image = if active {
-		current
-			.as_deref()
-			.and_then(|c| settings.icons.get(c).cloned())
-			.unwrap_or_else(crate::render::output_icon)
+	let image = if !draws_image(settings) {
+		None
+	} else if active {
+		Some(
+			current
+				.as_deref()
+				.and_then(|c| settings.icons.get(c).cloned())
+				.unwrap_or_else(crate::render::output_icon),
+		)
 	} else {
-		settings
-			.inactive_icon
-			.clone()
-			.unwrap_or_else(crate::render::output_disabled_icon)
+		Some(
+			settings
+				.inactive_icon
+				.clone()
+				.unwrap_or_else(crate::render::output_disabled_icon),
+		)
 	};
 	Surface { title, image }
 }
@@ -257,6 +278,6 @@ impl OutputAction {
 	/// Draw the key from the current default + settings.
 	async fn render(&self, instance: &Instance, settings: &OutputSettings) -> OpenActionResult<()> {
 		let s = surface(settings, &self.pw);
-		crate::display::output(instance, &s.title, &s.image).await
+		crate::display::output(instance, &s.title, s.image.as_deref()).await
 	}
 }

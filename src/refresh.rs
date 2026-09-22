@@ -147,7 +147,7 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 			continue;
 		};
 		let s = output::surface(settings, pw);
-		let _ = display::output(&inst, &s.title, &s.image).await;
+		let _ = display::output(&inst, &s.title, s.image.as_deref()).await;
 	}
 
 	// Default source (mic) volume (bar) + title (current input device, or custom).

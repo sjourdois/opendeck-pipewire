@@ -1,7 +1,10 @@
 //! Surface updates, dispatched by controller type.
 //!
-//! A **Keypad** button is fully plugin-drawn (an SVG key image, or a 2-state
-//! icon). On an **Encoder** (Stream Deck+ dial) the volume actions push the
+//! A **Keypad** button is plugin-drawn (an SVG key image, or a 2-state icon) —
+//! except the Output Device key, whose image is OpenDeck's own until the settings
+//! ask for an icon the plugin has to draw (see [`crate::actions::output`]), since
+//! a pushed image overwrites the user's for good.
+//! On an **Encoder** (Stream Deck+ dial) the volume actions push the
 //! value + level bar of the `$B1` layout via `setFeedback` (see [`crate::render`]);
 //! the icon stays the dial's own OpenDeck configuration. The device/app volume
 //! actions also push their resolved label as the title (so the dial names its
@@ -131,14 +134,16 @@ pub async fn picker(instance: &Instance, name: &str) -> OpenActionResult<()> {
 }
 
 /// Output toggle surface: `title` (the current default output, or the user's
-/// custom title) with the normal icon when active, or the greyed icon when the
-/// current default isn't one of the chosen sinks and `when_inactive == Disable`.
+/// custom title), plus `image` — the icon resolved from the settings, or `None`
+/// when the plugin doesn't draw this key (see [`crate::actions::output::Surface`]),
+/// in which case the image OpenDeck holds for it is left untouched.
 ///
 /// The key stays a single state so OpenDeck keeps the user's title font/position;
 /// the greyed look is a swapped image rather than a second state. On an encoder the
 /// title is the only surface (the dial keeps its own icon).
-pub async fn output(instance: &Instance, title: &str, image: &str) -> OpenActionResult<()> {
+pub async fn output(instance: &Instance, title: &str, image: Option<&str>) -> OpenActionResult<()> {
 	put_title(instance, title).await?;
+	let Some(image) = image else { return Ok(()) };
 	if is_encoder(instance) {
 		return Ok(());
 	}
