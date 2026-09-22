@@ -6,9 +6,6 @@
 //! title stays the dial's own OpenDeck configuration unless the action resolves
 //! a label, and a user-configured icon is sent as the touchstrip `icon`.
 
-use std::collections::HashMap;
-use std::io::Cursor;
-
 use base64::Engine;
 use serde_json::{Value, json};
 
@@ -159,77 +156,12 @@ pub fn value_text(known: bool, volume_cubic: f32, muted: bool) -> String {
 	}
 }
 
-/// Square side length of the normalized dial icon (see [`dial_icon`]).
-const DIAL_ICON_SIDE: u32 = 128;
-
-/// Normalized dial icons by original data URI, so the decode/resize/re-encode
-/// in [`dial_icon`] only runs when the icon actually changes.
-static DIAL_ICON_CACHE: std::sync::LazyLock<std::sync::Mutex<HashMap<String, String>>> =
-	std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
-
-/// Normalize a user icon data URI for the encoder touchstrip: the strip draws
-/// the icon into a square box, stretching whatever it gets, so a non-square
-/// image is fitted into a square PNG padded with transparency (aspect
-/// preserved). Square images and anything that isn't a decodable raster image
-/// (SVG, unknown formats) pass through unchanged.
-pub(crate) fn dial_icon(uri: &str) -> String {
-	if let Some(hit) = DIAL_ICON_CACHE.lock().unwrap().get(uri) {
-		return hit.clone();
-	}
-	let normalized = squared_png(uri).unwrap_or_else(|| uri.to_owned());
-	DIAL_ICON_CACHE
-		.lock()
-		.unwrap()
-		.insert(uri.to_owned(), normalized.clone());
-	normalized
-}
-
-/// Fit the raster image in a `data:` URI onto a transparent [`DIAL_ICON_SIDE`]
-/// square and re-encode it as PNG. `None` when the image is already square or
-/// the URI isn't a decodable raster image.
-fn squared_png(uri: &str) -> Option<String> {
-	let rest = uri.strip_prefix("data:")?;
-	let (mime, b64) = rest.split_once(";base64,")?;
-	if !mime.starts_with("image/") || mime.contains("svg") {
-		return None;
-	}
-	let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
-	let img = image::load_from_memory(&bytes).ok()?;
-	if img.width() == 0 || img.height() == 0 || img.width() == img.height() {
-		return None;
-	}
-	let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
-	let img = image::load_from_memory(&bytes).ok()?;
-	if img.width() == 0 || img.height() == 0 {
-		return None;
-	}
-	let fitted = img.thumbnail(DIAL_ICON_SIDE, DIAL_ICON_SIDE).to_rgba8();
-	let mut canvas =
-		image::RgbaImage::from_pixel(DIAL_ICON_SIDE, DIAL_ICON_SIDE, image::Rgba([0, 0, 0, 0]));
-	image::imageops::overlay(
-		&mut canvas,
-		&fitted,
-		((DIAL_ICON_SIDE - fitted.width()) / 2) as i64,
-		((DIAL_ICON_SIDE - fitted.height()) / 2) as i64,
-	);
-	let mut buf = Vec::new();
-	canvas
-		.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
-		.ok()?;
-	Some(format!(
-		"data:image/png;base64,{}",
-		base64::engine::general_purpose::STANDARD.encode(&buf)
-	))
-}
-
 /// `setFeedback` for the `$B1` volume layout: the "NN%"/"muted" `value` and the
 /// level `indicator` bar. A non-empty `title` (the surface label — a device/app
 /// name or the user's custom label) is sent too; otherwise the title is left to
 /// OpenDeck. `known == false` renders an "n/a" with a full bar in the
 /// configured n/a colour (yellow by default). A configured `icon` (data URI) is
-/// sent as the touchstrip `icon` — normalized to a square (see [`dial_icon`])
-/// so the strip doesn't stretch it; layouts without icon support ignore the
-/// field.
+/// sent as the touchstrip `icon`; layouts without icon support ignore the field.
 ///
 /// The layout can't draw the keypad's mute slash, so mute turns the value text and
 /// the bar to the mute colour instead — the strongest cue it allows. `setFeedback`
@@ -268,7 +200,7 @@ pub fn bar_feedback(
 		fb["title"] = Value::String(title.to_owned());
 	}
 	if let Some(uri) = icon.filter(|s| !s.is_empty()) {
-		fb["icon"] = Value::String(dial_icon(uri));
+		fb["icon"] = Value::String(uri.to_owned());
 	}
 	fb
 }
@@ -342,48 +274,6 @@ mod tests {
 		let svg = svg_of(&unavailable_key(&colors, &VolumeUi::default()));
 		assert!(svg.contains("#123456"));
 		assert!(!svg.contains(UNAVAILABLE));
-	}
-
-	#[test]
-	fn dial_icon_pads_to_square_png() {
-		// A 4x2 red PNG must come back as a 128x128 PNG (aspect preserved via
-		// padding, never stretched).
-		let mut buf = Vec::new();
-		image::RgbaImage::from_pixel(4, 2, image::Rgba([255, 0, 0, 255]))
-			.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
-			.unwrap();
-		let uri = format!(
-			"data:image/png;base64,{}",
-			base64::engine::general_purpose::STANDARD.encode(&buf)
-		);
-		let out = dial_icon(&uri);
-		let rest = out
-			.strip_prefix("data:image/png;base64,")
-			.expect("re-encoded as PNG data URI");
-		let raw = base64::engine::general_purpose::STANDARD
-			.decode(rest)
-			.unwrap();
-		let img = image::load_from_memory(&raw).unwrap();
-		assert_eq!((img.width(), img.height()), (128, 128));
-	}
-
-	#[test]
-	fn dial_icon_passes_through_svg() {
-		let uri = "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=";
-		assert_eq!(dial_icon(uri), uri);
-	}
-
-	#[test]
-	fn dial_icon_passes_through_square_png() {
-		let mut buf = Vec::new();
-		image::RgbaImage::from_pixel(32, 32, image::Rgba([0, 0, 255, 255]))
-			.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
-			.unwrap();
-		let uri = format!(
-			"data:image/png;base64,{}",
-			base64::engine::general_purpose::STANDARD.encode(&buf)
-		);
-		assert_eq!(dial_icon(&uri), uri);
 	}
 
 	#[test]

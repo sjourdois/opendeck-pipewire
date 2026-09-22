@@ -2,17 +2,6 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<style>
-			.icon-btn {
-				width: 28px;
-				height: 28px;
-				padding: 0;
-				flex: 0 0 auto;
-				background-size: cover;
-				background-position: center;
-				background-repeat: no-repeat;
-			}
-		</style>
 		<script>
 			let update = () => {};
 			let syncStep = () => {};
@@ -62,42 +51,7 @@
 
 			const iconBox = document.getElementById("icon");
 			let icon = settings.icon || null;
-			const pickIcon = (cb) => {
-				const inp = document.createElement("input");
-				inp.type = "file";
-				inp.accept = "image/*";
-				// Kept in the document (invisible): a detached file input does not
-				// reliably open a picker / fire change in every webview.
-				inp.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
-				document.body.appendChild(inp);
-				inp.addEventListener("change", () => {
-					const f = inp.files && inp.files[0];
-					inp.remove();
-					if (!f) return;
-					const r = new FileReader();
-					r.onload = () => cb(r.result);
-					r.readAsDataURL(f);
-				});
-				inp.click();
-			};
-			const renderIcon = () => {
-				iconBox.innerHTML = "";
-				const btn = document.createElement("button");
-				btn.className = "icon-btn";
-				btn.title = icon ? "Change icon" : "Set icon";
-				if (icon) btn.style.backgroundImage = `url("${icon}")`;
-				else btn.textContent = "🖼";
-				btn.addEventListener("click", () => pickIcon((u) => { icon = u; update(); renderIcon(); }));
-				iconBox.appendChild(btn);
-				if (icon) {
-					const clr = document.createElement("button");
-					clr.textContent = "⌫";
-					clr.title = "Remove icon";
-					clr.addEventListener("click", () => { icon = null; update(); renderIcon(); });
-					iconBox.appendChild(clr);
-				}
-			};
-			renderIcon();
+				iconRow(iconBox, () => icon, (u) => { icon = u; }, () => update());
 
 				const isKeypad = inActionInfo.payload.controller != "Encoder";
 				if (!isKeypad) direction.style.display = "none";
@@ -168,6 +122,7 @@
 				};
 			}
 		</script>
+		<script src="icon.js"></script>
 		<link rel="stylesheet" href="sdpi.css" />
 	</head>
 	<body>

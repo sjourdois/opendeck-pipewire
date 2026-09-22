@@ -684,9 +684,18 @@ select {
 .label-row {
 	display: flex;
 	align-items: center;
-	justify-content: flex-start;
 	gap: 8px;
 	width: 100%;
+}
+
+.icon-btn {
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	flex: 0 0 auto;
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
 }
 
 .label-row input[type="checkbox"] {

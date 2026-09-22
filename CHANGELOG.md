@@ -14,9 +14,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   full bar in a configurable colour (yellow by default) instead of the "—"
   placeholder / empty bar.
 - **Custom icons for all volume actions**: pick an image in the property
-  inspector; it is drawn undistorted at the top of the keypad key and sent as
-  the encoder touchstrip icon (padded to a square so the strip doesn't stretch
-  it).
+  inspector; it is drawn at the top of the keypad key and sent as the encoder
+  touchstrip icon. The picker fits it on a transparent 128×128 square, so
+  nothing is stretched and the profile doesn't carry a full-resolution photo.
 - **Limit to 100%**: an optional checkbox caps volume increases through the
   action at 100% instead of the +50% boost range.
 - **Custom label for App Volume**: like the device volume actions, the app key
