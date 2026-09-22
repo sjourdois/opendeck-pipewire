@@ -121,7 +121,7 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		let title = volume::resolve_title(&settings.title, pw);
 		let _ = display::volume(
 			&inst,
-			&title,
+			display::Label::from_option(settings.title.as_deref(), &title),
 			sink.known,
 			sink.volume_cubic,
 			sink.mute,
@@ -152,7 +152,7 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		let title = mic_volume::resolve_title(&settings.title, pw);
 		let _ = display::mic(
 			&inst,
-			&title,
+			display::Label::from_option(settings.title.as_deref(), &title),
 			source.known,
 			source.volume_cubic,
 			source.mute,
@@ -177,9 +177,10 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		};
 		let live = settings.sink.as_deref().and_then(|n| pw.sink_state(n));
 		let (vol, mute) = live.unwrap_or((0.0, false));
+		let text = device_volume::label(settings, pw);
 		let _ = display::device(
 			&inst,
-			&device_volume::label(settings, pw),
+			display::Label::from_field(&settings.name, &text),
 			live.is_some(),
 			vol,
 			mute,
@@ -197,9 +198,10 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		};
 		let live = settings.source.as_deref().and_then(|n| pw.source_state(n));
 		let (vol, mute) = live.unwrap_or((0.0, false));
+		let text = input_volume::label(settings, pw);
 		let _ = display::input(
 			&inst,
-			&input_volume::label(settings, pw),
+			display::Label::from_field(&settings.name, &text),
 			live.is_some(),
 			vol,
 			mute,
@@ -218,9 +220,10 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 		let target = settings.app.as_deref().filter(|s| !s.is_empty());
 		let live = target.and_then(|a| pw.app_state(a));
 		let (vol, mute) = live.unwrap_or((0.0, false));
+		let text = app_volume::label(settings);
 		let _ = display::app(
 			&inst,
-			&app_volume::label(settings),
+			display::Label::from_field(&settings.name, &text),
 			live.is_some(),
 			vol,
 			mute,

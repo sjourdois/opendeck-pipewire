@@ -24,20 +24,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Larger dial titles**: the volume actions switch their encoder to a shipped
   `$B1`-based layout with a larger title font at runtime (no re-adding of
   buttons needed).
-- **Recognizable dial previews**: the OpenDeck window shows the label — and the
-  custom icon, once one is set — for encoder instances, which the touchstrip
-  feedback values it doesn't render never gave it. Setting a dial's icon hands
-  its image to the plugin for good, as it does for the Output Device key, so
-  the property inspector says so and the plugin never pushes an empty one.
+- **Recognizable dial previews**: the OpenDeck window renders none of the
+  touchstrip feedback, so an encoder's preview there was anonymous. It now shows
+  the icon and label you set in the property inspector. Only those: the dial's
+  preview icon and title are the same fields OpenDeck's own dial editor writes
+  to, so the plugin fills neither unless you asked for it there, and clears
+  neither ever. Leave them unset and the dial stays yours to name in OpenDeck —
+  the touchstrip still shows the device or app name, as before.
 
 ### Changed
-
-- **A dial's title is now the plugin's.** The preview writes the resolved label
-  into the dial's state, which is the same field OpenDeck's dial editor writes
-  to, and it is rewritten on every redraw — so 0.2.0's "keeping the dial's own
-  icon and title" no longer holds for the title. The property inspector's
-  Title / Label field decides it. The icon is untouched unless you set one
-  there.
 - The volume actions' icons are squared in the property inspector at pick time,
   on a 128×128 canvas, rather than in the plugin: the `image` crate and its 18
   transitive crates are gone, and an icon no longer crosses the websocket at

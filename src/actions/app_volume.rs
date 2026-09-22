@@ -226,9 +226,10 @@ impl AppVolumeAction {
 		vol: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
+		let text = label(settings);
 		crate::display::app(
 			instance,
-			&label(settings),
+			crate::display::Label::from_field(&settings.name, &text),
 			known,
 			vol,
 			mute,

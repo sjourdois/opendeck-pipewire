@@ -44,9 +44,10 @@ aggregated across its streams.
 Every volume action **labels** itself: Output and Input Volume with the current
 default device, the Device Volume and App Volume actions with their own target.
 Each takes a custom label from the property inspector instead. On a Stream Deck+
-dial that label is written to the dial's title too, so the OpenDeck window shows
-which target the dial drives — which means the plugin, not OpenDeck's dial editor,
-decides that title.
+the touchstrip always carries that label; the dial's preview in the OpenDeck
+window only gets it if the label is one you typed, since that preview's title is
+the field OpenDeck's own dial editor writes to and the plugin leaves it to you
+otherwise.
 
 The **Output Device** key leaves its image to OpenDeck — the action's icon, or one
 you picked in OpenDeck's own key editor — until the property inspector asks for an

@@ -173,9 +173,10 @@ impl VolumeAction {
 		let snap = self.pw.default_sink_snapshot();
 		let target = !snap.mute;
 		self.pw.send(Command::SetMute(Some(target)));
+		let title = resolve_title(&settings.title, &self.pw);
 		crate::display::volume(
 			instance,
-			&resolve_title(&settings.title, &self.pw),
+			crate::display::Label::from_option(settings.title.as_deref(), &title),
 			snap.known,
 			snap.volume_cubic,
 			target,
@@ -192,9 +193,10 @@ impl VolumeAction {
 		settings: &VolumeSettings,
 	) -> OpenActionResult<()> {
 		let snap = self.pw.default_sink_snapshot();
+		let title = resolve_title(&settings.title, &self.pw);
 		crate::display::volume(
 			instance,
-			&resolve_title(&settings.title, &self.pw),
+			crate::display::Label::from_option(settings.title.as_deref(), &title),
 			snap.known,
 			snap.volume_cubic,
 			snap.mute,

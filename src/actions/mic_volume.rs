@@ -170,9 +170,10 @@ impl MicVolumeAction {
 		let snap = self.pw.default_source_snapshot();
 		let target = !snap.mute;
 		self.pw.send(Command::SetDefaultSourceMute(Some(target)));
+		let title = resolve_title(&settings.title, &self.pw);
 		crate::display::mic(
 			instance,
-			&resolve_title(&settings.title, &self.pw),
+			crate::display::Label::from_option(settings.title.as_deref(), &title),
 			snap.known,
 			snap.volume_cubic,
 			target,
@@ -188,9 +189,10 @@ impl MicVolumeAction {
 		settings: &MicVolumeSettings,
 	) -> OpenActionResult<()> {
 		let snap = self.pw.default_source_snapshot();
+		let title = resolve_title(&settings.title, &self.pw);
 		crate::display::mic(
 			instance,
-			&resolve_title(&settings.title, &self.pw),
+			crate::display::Label::from_option(settings.title.as_deref(), &title),
 			snap.known,
 			snap.volume_cubic,
 			snap.mute,

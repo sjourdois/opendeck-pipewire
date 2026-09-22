@@ -5,15 +5,15 @@
 //! ask for an icon the plugin has to draw (see [`crate::actions::output`]), since
 //! a pushed image overwrites the user's for good.
 //! On an **Encoder** (Stream Deck+ dial) the volume actions push the value +
-//! level bar of the touchstrip layout via `setFeedback` (see [`crate::render`]);
-//! a user-configured icon is sent as the touchstrip `icon`, otherwise the dial
-//! keeps its own OpenDeck icon. The resolved label is mirrored into the dial's
-//! state so the OpenDeck window shows a recognizable preview — which does take
-//! the dial's title over from OpenDeck's own editor, the property inspector's
-//! label field deciding it from then on. The icon goes with it only when one is
-//! configured, and only ever as a value: clearing a dial's image destroys
-//! OpenDeck's own as surely as overwriting it. Mute is a `set_state`, and the
-//! device pickers set a default title. See the `encoder-feedback-model` notes.
+//! level bar of the touchstrip layout via `setFeedback` (see [`crate::render`]),
+//! with the resolved label as its title: that payload is transient and the
+//! plugin's to draw. The dial's **state** — the icon and title the OpenDeck
+//! window shows as a preview — belongs to OpenDeck, and the plugin writes to it
+//! only where the property inspector asks: an icon when one is set there, a
+//! title when a label is typed there (see [`Label`]). Neither is ever cleared,
+//! since clearing a dial's image destroys OpenDeck's own as surely as
+//! overwriting it. Mute is a `set_state`, and the device pickers set a default
+//! title. See the `encoder-feedback-model` notes.
 //!
 //! Actions and the out-of-band [`crate::refresh`] task share one path per action.
 
@@ -48,9 +48,42 @@ pub async fn encoder_layout(instance: &Instance) -> OpenActionResult<()> {
 	Ok(())
 }
 
+/// A surface's label: what it shows, and whether the user chose that text.
+///
+/// The distinction only matters on a dial. The touchstrip title is the plugin's
+/// to draw, but the preview title goes out through `set_title`, into the field
+/// OpenDeck's own dial editor writes to — so it is pushed only when the property
+/// inspector carries a label, never when the text is merely the device or app
+/// name the plugin resolved on its own.
+#[derive(Clone, Copy)]
+pub struct Label<'a> {
+	/// What the surface shows: the user's text, else the resolved name.
+	pub text: &'a str,
+	/// Whether `text` came from the property inspector.
+	pub custom: bool,
+}
+
+impl<'a> Label<'a> {
+	/// A label whose property-inspector field is empty when unset.
+	pub fn from_field(field: &str, resolved: &'a str) -> Self {
+		Self {
+			text: resolved,
+			custom: !field.is_empty(),
+		}
+	}
+
+	/// A label whose property-inspector field is `None` when unset.
+	pub fn from_option(field: Option<&str>, resolved: &'a str) -> Self {
+		Self {
+			text: resolved,
+			custom: field.is_some(),
+		}
+	}
+}
+
 /// Everything [`bar`] needs to draw a volume-style surface.
 struct BarSurface<'a> {
-	title: &'a str,
+	label: Label<'a>,
 	known: bool,
 	volume_cubic: f32,
 	muted: bool,
@@ -63,7 +96,7 @@ struct BarSurface<'a> {
 #[derive(PartialEq)]
 struct Preview {
 	icon: Option<String>,
-	title: String,
+	title: Option<String>,
 }
 
 /// Last [`Preview`] pushed per instance, so an unchanged one isn't re-sent:
@@ -92,7 +125,7 @@ async fn bar(
 		// draws in its image); a configured icon overrides the dial icon.
 		instance
 			.set_feedback(&render::bar_feedback(
-				surface.title,
+				surface.label.text,
 				surface.known,
 				surface.volume_cubic,
 				surface.muted,
@@ -112,7 +145,7 @@ async fn bar(
 		// it, for good (see [`crate::actions::output`]).
 		let preview = Preview {
 			icon: surface.ui.icon().map(str::to_owned),
-			title: surface.title.to_owned(),
+			title: surface.label.custom.then(|| surface.label.text.to_owned()),
 		};
 		let changed = PREVIEW
 			.lock()
@@ -123,9 +156,9 @@ async fn bar(
 			if let Some(icon) = preview.icon.as_deref() {
 				instance.set_image(Some(icon), None).await?;
 			}
-			instance
-				.set_title(Some(preview.title.clone()), None)
-				.await?;
+			if let Some(title) = preview.title.as_deref() {
+				instance.set_title(Some(title), None).await?;
+			}
 			PREVIEW
 				.lock()
 				.unwrap()
@@ -144,12 +177,12 @@ async fn bar(
 	}
 }
 
-/// Default-sink / master volume. `label` is the resolved surface text — the
-/// user's custom title, else the current default output's name — shown as the
-/// encoder title and preview. `known == false` when there is no default sink yet.
+/// Default-sink / master volume. `label` carries the surface text — the user's
+/// custom title, else the current default output's name — and which of the two
+/// it is. `known == false` when there is no default sink yet.
 pub async fn volume(
 	instance: &Instance,
-	label: &str,
+	label: Label<'_>,
 	known: bool,
 	vol: f32,
 	muted: bool,
@@ -157,7 +190,7 @@ pub async fn volume(
 	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
 	let surface = BarSurface {
-		title: label,
+		label,
 		known,
 		volume_cubic: vol,
 		muted,
@@ -173,7 +206,7 @@ pub async fn volume(
 /// Default-source / mic volume (same surface as [`volume`]).
 pub async fn mic(
 	instance: &Instance,
-	label: &str,
+	label: Label<'_>,
 	known: bool,
 	vol: f32,
 	muted: bool,
@@ -181,7 +214,7 @@ pub async fn mic(
 	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
 	let surface = BarSurface {
-		title: label,
+		label,
 		known,
 		volume_cubic: vol,
 		muted,
@@ -194,13 +227,13 @@ pub async fn mic(
 	.await
 }
 
-/// A specific output device's volume. `label` is the resolved surface text — the
-/// user's custom label, else the device's friendly name — shown both as the keypad
-/// image text and as the encoder title. `known == false` when no device is
-/// configured or it isn't currently available.
+/// A specific output device's volume. `label` carries the surface text — the
+/// user's custom label, else the device's friendly name — shown both as the
+/// keypad image text and as the encoder title. `known == false` when no device
+/// is configured or it isn't currently available.
 pub async fn device(
 	instance: &Instance,
-	label: &str,
+	label: Label<'_>,
 	known: bool,
 	vol: f32,
 	muted: bool,
@@ -208,7 +241,7 @@ pub async fn device(
 	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
 	let surface = BarSurface {
-		title: label,
+		label,
 		known,
 		volume_cubic: vol,
 		muted,
@@ -216,18 +249,18 @@ pub async fn device(
 		ui,
 	};
 	bar(instance, &surface, || {
-		render::label_bar_key(label, vol, muted, colors, ui)
+		render::label_bar_key(label.text, vol, muted, colors, ui)
 	})
 	.await
 }
 
-/// A specific input device's volume. `label` is the resolved surface text — the
-/// user's custom label, else the device's friendly name — shown both as the keypad
-/// image text and as the encoder title. `known == false` when no input is
-/// configured or it isn't currently available.
+/// A specific input device's volume. `label` carries the surface text — the
+/// user's custom label, else the device's friendly name — shown both as the
+/// keypad image text and as the encoder title. `known == false` when no input
+/// is configured or it isn't currently available.
 pub async fn input(
 	instance: &Instance,
-	label: &str,
+	label: Label<'_>,
 	known: bool,
 	vol: f32,
 	muted: bool,
@@ -235,7 +268,7 @@ pub async fn input(
 	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
 	let surface = BarSurface {
-		title: label,
+		label,
 		known,
 		volume_cubic: vol,
 		muted,
@@ -243,7 +276,7 @@ pub async fn input(
 		ui,
 	};
 	bar(instance, &surface, || {
-		render::label_bar_key(label, vol, muted, colors, ui)
+		render::label_bar_key(label.text, vol, muted, colors, ui)
 	})
 	.await
 }
@@ -299,7 +332,7 @@ pub async fn title(instance: &Instance, text: &str) -> OpenActionResult<()> {
 /// with a yellow bar.
 pub async fn app(
 	instance: &Instance,
-	label: &str,
+	label: Label<'_>,
 	known: bool,
 	vol: f32,
 	muted: bool,
@@ -307,7 +340,7 @@ pub async fn app(
 	ui: &VolumeUi,
 ) -> OpenActionResult<()> {
 	let surface = BarSurface {
-		title: label,
+		label,
 		known,
 		volume_cubic: vol,
 		muted,
@@ -315,7 +348,7 @@ pub async fn app(
 		ui,
 	};
 	bar(instance, &surface, || {
-		render::label_bar_key(label, vol, muted, colors, ui)
+		render::label_bar_key(label.text, vol, muted, colors, ui)
 	})
 	.await
 }

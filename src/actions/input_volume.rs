@@ -228,9 +228,10 @@ impl InputVolumeAction {
 		volume_cubic: f32,
 		mute: bool,
 	) -> OpenActionResult<()> {
+		let text = label(settings, &self.pw);
 		crate::display::input(
 			instance,
-			&label(settings, &self.pw),
+			crate::display::Label::from_field(&settings.name, &text),
 			known,
 			volume_cubic,
 			mute,
