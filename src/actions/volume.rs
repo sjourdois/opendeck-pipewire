@@ -74,6 +74,7 @@ impl Action for VolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "key_down");
 		let step = super::step_fraction(settings.step);
 		match settings.mode {
 			super::KeyMode::Up => self.adjust(instance, settings, step).await,
@@ -89,6 +90,7 @@ impl Action for VolumeAction {
 		ticks: i16,
 		_pressed: bool,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "dial_rotate");
 		let step = super::step_fraction(settings.step);
 		self.adjust(instance, settings, ticks as f32 * step).await
 	}
@@ -98,6 +100,7 @@ impl Action for VolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "dial_down");
 		// Pressing the encoder toggles mute on the default sink.
 		self.toggle_mute(instance, settings).await
 	}
@@ -109,6 +112,7 @@ impl Action for VolumeAction {
 		_position: (u16, u16),
 		_hold: bool,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "touch_tap");
 		// Tapping the touchstrip mirrors the dial press: toggle mute.
 		self.toggle_mute(instance, settings).await
 	}

@@ -80,6 +80,7 @@ impl Action for InputVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "key_down");
 		let step = super::step_fraction(settings.step);
 		match settings.mode {
 			super::KeyMode::Up => self.adjust(instance, settings, step).await,
@@ -95,6 +96,7 @@ impl Action for InputVolumeAction {
 		ticks: i16,
 		_pressed: bool,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "dial_rotate");
 		let step = super::step_fraction(settings.step);
 		self.adjust(instance, settings, ticks as f32 * step).await
 	}
@@ -104,6 +106,7 @@ impl Action for InputVolumeAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "dial_down");
 		self.toggle_mute(instance, settings).await
 	}
 
@@ -114,6 +117,7 @@ impl Action for InputVolumeAction {
 		_position: (u16, u16),
 		_hold: bool,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "touch_tap");
 		self.toggle_mute(instance, settings).await
 	}
 

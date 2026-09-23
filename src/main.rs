@@ -11,6 +11,7 @@ mod display;
 mod pw;
 mod refresh;
 mod render;
+mod trace;
 mod ui;
 
 use actions::{
@@ -94,7 +95,9 @@ async fn main() -> OpenActionResult<()> {
 		tokio::spawn(async move {
 			let mut changes = pw.subscribe();
 			loop {
+				let start = std::time::Instant::now();
 				refresh::refresh_all(&pw, &refresher).await;
+				trace::slow_refresh(start);
 				if changes.changed().await.is_err() {
 					break;
 				}

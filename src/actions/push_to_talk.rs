@@ -33,6 +33,7 @@ impl Action for PushToTalkAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "key_down");
 		// Held: talk (unmute), or push-to-mute (mute) when inverted.
 		let mute = settings.inverted;
 		self.pw.send(Command::SetDefaultSourceMute(Some(mute)));
@@ -40,6 +41,7 @@ impl Action for PushToTalkAction {
 	}
 
 	async fn key_up(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "key_up");
 		// Released: back to the resting state (muted for talk, open for mute).
 		let mute = !settings.inverted;
 		self.pw.send(Command::SetDefaultSourceMute(Some(mute)));

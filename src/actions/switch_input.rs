@@ -40,6 +40,7 @@ impl Action for SwitchInputAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "key_down");
 		match self.next(settings) {
 			Some(next) => {
 				self.pw.send(Command::SetDefaultSource(next.clone()));
@@ -54,6 +55,7 @@ impl Action for SwitchInputAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "dial_down");
 		self.key_down(instance, settings).await
 	}
 
@@ -64,6 +66,7 @@ impl Action for SwitchInputAction {
 		_position: (u16, u16),
 		_hold: bool,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "touch_tap");
 		self.key_down(instance, settings).await
 	}
 

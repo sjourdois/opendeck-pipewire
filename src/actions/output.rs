@@ -71,6 +71,7 @@ impl Action for OutputAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "key_down");
 		if let Some(next) = self.next(settings) {
 			match &settings.stream {
 				Some(stream) => self.pw.send(Command::SetStreamTarget {
@@ -89,6 +90,7 @@ impl Action for OutputAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "dial_down");
 		self.key_down(instance, settings).await
 	}
 
@@ -99,6 +101,7 @@ impl Action for OutputAction {
 		_position: (u16, u16),
 		_hold: bool,
 	) -> OpenActionResult<()> {
+		let _event = crate::trace::Event::start(instance, "touch_tap");
 		self.key_down(instance, settings).await
 	}
 
