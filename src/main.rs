@@ -21,12 +21,18 @@ use openaction::*;
 #[tokio::main]
 async fn main() -> OpenActionResult<()> {
 	// Logs are written to stdout, which OpenDeck redirects into the plugin log
-	// file (~/.config/opendeck/logs/plugins/<uuid>.log).
+	// file (~/.config/opendeck/logs/plugins/<uuid>.log). Timestamps are UTC, to
+	// the millisecond: telling a late event from a slow reply needs that.
 	{
 		use simplelog::*;
+		let config = ConfigBuilder::new()
+			.set_time_format_custom(format_description!(
+				"[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"
+			))
+			.build();
 		if let Err(error) = TermLogger::init(
 			LevelFilter::Info,
-			Config::default(),
+			config,
 			TerminalMode::Stdout,
 			ColorChoice::Never,
 		) {
