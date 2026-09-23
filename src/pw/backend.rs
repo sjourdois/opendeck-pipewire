@@ -39,6 +39,17 @@ struct NodeRef {
 	_listener: pipewire::node::NodeListener,
 }
 
+impl NodeRef {
+	/// Cache the mute state PipeWire reports through `via` (node Props or the
+	/// device route), logging it when it flips.
+	fn set_mute(&mut self, mute: bool, via: &str) {
+		if mute != self.mute {
+			log::info!("{} mute {mute} (from {via})", self.name);
+		}
+		self.mute = mute;
+	}
+}
+
 /// A tracked `Device` (sound card) and its output routes, keyed by the route's
 /// `device` index (== a node's `card.profile.device`).
 struct DeviceRef {
@@ -902,7 +913,7 @@ fn update_node_from_props(inner: &Rc<RefCell<Inner>>, id: u32, pod: &pipewire::s
 			n.volume_cubic = linear_to_cubic(l);
 		}
 		if let Some(m) = mute {
-			n.mute = m;
+			n.set_mute(m, "props");
 		}
 	}
 	drop(b);
@@ -989,7 +1000,7 @@ fn update_device_route(inner: &Rc<RefCell<Inner>>, dev_id: u32, pod: &pipewire::
 				changed = true;
 			}
 			if let Some(m) = mute {
-				n.mute = m;
+				n.set_mute(m, "route");
 				changed = true;
 			}
 		}
