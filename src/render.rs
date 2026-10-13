@@ -110,6 +110,15 @@ pub fn output_disabled_icon() -> String {
 	data_uri(include_str!("../assets/icons/outputDisabled.svg"))
 }
 
+/// A custom icon (a data URI) drawn at reduced opacity over the key's black
+/// background, for an Output Device key whose device isn't the active one.
+pub fn dimmed(icon: &str) -> String {
+	data_uri(&format!(
+		r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 128 128"><image width="128" height="128" opacity="0.35" preserveAspectRatio="xMidYMid meet" href="{uri}" xlink:href="{uri}"/></svg>"##,
+		uri = escape(icon)
+	))
+}
+
 /// A bold slash drawn corner-to-corner across the whole key to signal mute, in
 /// the configured mute colour. Overlaid last (on top of the label/bar) by the
 /// keypad renderers when muted; empty when unmuted.

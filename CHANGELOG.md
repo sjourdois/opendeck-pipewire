@@ -31,6 +31,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Output Device: one key per device**
+  ([#3](https://github.com/sjourdois/opendeck-pipewire/issues/3)). A key whose
+  device isn't the active one now shows that device's icon dimmed, instead of the
+  stock icon, whether it cycles or ignores presses; an icon set for when inactive
+  still takes precedence.
 - A device with a hardware mute no longer shows as unmuted on the next redraw.
 
 ## [0.4.0]

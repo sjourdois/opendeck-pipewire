@@ -174,3 +174,31 @@ pub fn start() -> Result<PwHandle> {
 		notify,
 	})
 }
+
+#[cfg(test)]
+impl PwHandle {
+	/// A handle with no PipeWire thread behind it, holding a default sink and
+	/// stream routes as `(stream, target, sink)`, for testing what actions draw.
+	pub fn fake(default_sink: Option<&str>, streams: &[(&str, &str, &str)]) -> Self {
+		let (tx, _) = pipewire::channel::channel::<Command>();
+		let (notify, _) = tokio::sync::watch::channel(0u64);
+		let routes = |pick: fn(&(&str, &str, &str)) -> String| {
+			Arc::new(Mutex::new(
+				streams.iter().map(|s| (s.0.to_owned(), pick(s))).collect(),
+			))
+		};
+		PwHandle {
+			tx: Arc::new(Mutex::new(tx)),
+			state: Default::default(),
+			source_state: Default::default(),
+			sinks: Default::default(),
+			sources: Default::default(),
+			apps: Default::default(),
+			default_sink_name: Arc::new(Mutex::new(default_sink.map(str::to_owned))),
+			default_source_name: Default::default(),
+			stream_targets: routes(|s| s.1.to_owned()),
+			stream_sinks: routes(|s| s.2.to_owned()),
+			notify: Arc::new(notify),
+		}
+	}
+}
