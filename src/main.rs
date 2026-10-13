@@ -8,6 +8,7 @@ mod actions;
 mod color;
 mod command;
 mod display;
+mod names;
 mod pw;
 mod refresh;
 mod render;
@@ -17,7 +18,33 @@ mod ui;
 use actions::{
 	app_volume, device_volume, input_volume, mic_volume, output, push_to_talk, switch_input, volume,
 };
+use openaction::global_events::*;
 use openaction::*;
+
+/// Plugin-wide events: the device names kept in the global settings.
+struct Global {
+	pw: pw::PwHandle,
+	refresher: refresh::Refresher,
+}
+
+#[async_trait]
+impl GlobalEventHandler for Global {
+	async fn plugin_ready(&self) -> OpenActionResult<()> {
+		get_global_settings().await
+	}
+
+	async fn did_receive_global_settings(
+		&self,
+		event: DidReceiveGlobalSettingsEvent,
+	) -> OpenActionResult<()> {
+		match serde_json::from_value(event.payload.settings) {
+			Ok(settings) => names::store(settings),
+			Err(error) => log::warn!("unreadable global settings, ignored: {error}"),
+		}
+		refresh::refresh_all(&self.pw, &self.refresher).await;
+		Ok(())
+	}
+}
 
 #[tokio::main]
 async fn main() -> OpenActionResult<()> {
@@ -53,6 +80,11 @@ async fn main() -> OpenActionResult<()> {
 
 	let refresher = refresh::Refresher::default();
 
+	set_global_event_handler(Box::leak(Box::new(Global {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})));
+
 	register_action(volume::VolumeAction {
 		pw: pw.clone(),
 		refresher: refresher.clone(),
@@ -83,7 +115,11 @@ async fn main() -> OpenActionResult<()> {
 		refresher: refresher.clone(),
 	})
 	.await;
-	register_action(switch_input::SwitchInputAction { pw: pw.clone() }).await;
+	register_action(switch_input::SwitchInputAction {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})
+	.await;
 	register_action(push_to_talk::PushToTalkAction { pw: pw.clone() }).await;
 
 	// Re-render visible keys whenever PipeWire state changes out-of-band (volume

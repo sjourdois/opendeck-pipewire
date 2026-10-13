@@ -54,6 +54,7 @@ pub struct OutputSettings {
 struct SinksMessage {
 	event: &'static str,
 	sinks: Vec<SinkDesc>,
+	names: HashMap<String, String>,
 }
 
 pub struct OutputAction {
@@ -142,8 +143,19 @@ impl Action for OutputAction {
 			.send_to_property_inspector(SinksMessage {
 				event: "sinks",
 				sinks: self.pw.sinks(),
+				names: crate::names::all(),
 			})
 			.await
+	}
+
+	async fn send_to_plugin(
+		&self,
+		_instance: &Instance,
+		_settings: &Self::Settings,
+		payload: &serde_json::Value,
+	) -> OpenActionResult<()> {
+		crate::names::inspector_message(payload, &self.pw, &self.refresher).await;
+		Ok(())
 	}
 }
 
@@ -222,7 +234,7 @@ pub fn surface(settings: &OutputSettings, pw: &PwHandle) -> Surface {
 		Some(t) => t.clone(),
 		None => current
 			.as_deref()
-			.map(|c| describe(pw, c))
+			.map(|c| crate::names::sink(pw, c))
 			.unwrap_or_else(|| "Output".to_owned()),
 	};
 	let image = if !draws_image(settings) {
@@ -256,15 +268,6 @@ pub fn surface(settings: &OutputSettings, pw: &PwHandle) -> Surface {
 	Surface { title, image }
 }
 
-/// A sink's friendly description, falling back to its `node.name`.
-fn describe(pw: &PwHandle, name: &str) -> String {
-	pw.sinks()
-		.into_iter()
-		.find(|s| s.name == name)
-		.map(|s| s.description)
-		.unwrap_or_else(|| name.to_owned())
-}
-
 impl OutputAction {
 	/// The next sink to switch to, or `None` when a press should do nothing:
 	/// the one after the current default in the list (wrapping); the first when the
@@ -292,7 +295,7 @@ impl OutputAction {
 	/// Draw the key from the current default + settings.
 	async fn render(&self, instance: &Instance, settings: &OutputSettings) -> OpenActionResult<()> {
 		let s = surface(settings, &self.pw);
-		crate::display::output(instance, &s.title, s.image.as_deref()).await
+		crate::display::picker(instance, &s.title, s.image.as_deref()).await
 	}
 }
 

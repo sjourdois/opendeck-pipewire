@@ -26,10 +26,10 @@ reimplemented natively in Rust.
 | **Output Volume** | Keypad · Encoder | Adjust the default output (sink) volume; live %-bar key image |
 | **Output Device Volume** | Keypad · Encoder | Adjust the volume of a specific named output device |
 | **Output App Volume** | Keypad · Encoder | Adjust the volume of a specific application (Firefox, Spotify, …) |
-| **Output Device** | Keypad · Encoder | Switch the system default output; pick several devices to cycle through them, with a per-device icon, or one key per device, dimmed while another device is active; can retarget a single stream instead of the default |
+| **Output Device** | Keypad · Encoder | Switch the system default output; pick several devices to cycle through them, with a per-device icon and name, or one key per device, dimmed while another device is active; can retarget a single stream instead of the default |
 | **Input Volume** | Keypad · Encoder | Adjust the default input (mic/source) volume |
 | **Input Device Volume** | Keypad · Encoder | Adjust the volume of a specific named input device |
-| **Input Device** | Keypad · Encoder | Switch the system default input; pick several devices to cycle through them |
+| **Input Device** | Keypad · Encoder | Switch the system default input; pick several devices to cycle through them, with a per-device icon and name |
 | **Push to Talk** | Keypad | Hold to talk (unmute the mic while held); optional push-to-mute |
 
 Each **volume action** has an *On press* mode — **Volume up**, **Volume down**, or
@@ -57,12 +57,19 @@ label can span several lines (press Enter in the *Label* field); they are
 centred above the bar, the last one shown ends in an ellipsis when the rest
 don't fit, and on a dial's touchstrip they are joined into one line.
 
-The **Output Device** key leaves its image to OpenDeck — the action's icon, or one
-you picked in OpenDeck's own key editor — until the property inspector asks for an
-icon only the plugin can pick: a per-device icon, an icon for when the key is
-inactive, or the greyed-out look of *Disable*. From that point the plugin draws the
-key, and OpenDeck's image for it is lost: the volume actions, which draw a live
-level bar, own their key image the same way.
+**Device names** are your own: in the device list of an Output Device or Input
+Device key's property inspector, type a name over a device's to rename it. The
+name belongs to the device, not to the key, so every key that shows that device
+takes it at once — Output and Input Device, Output and Input Volume, and the
+Device Volume actions — as do the property inspectors' device lists. Clear it to
+get the device's own name back. A key's custom title or label still wins.
+
+They leave their image to OpenDeck — the action's icon, or one you picked in
+OpenDeck's own key editor — until the property inspector asks for an icon only the
+plugin can pick: a per-device icon, or on the Output Device key an icon for when
+the key is inactive, or the greyed-out look of *Disable*. From that point the plugin
+draws the key, and OpenDeck's image for it is lost: the volume actions, which draw a
+live level bar, own their key image the same way.
 
 Every volume action's **bar colours** (unmuted and muted) are configurable in the
 property inspector, along with a **custom icon** — fitted to a transparent 128×128

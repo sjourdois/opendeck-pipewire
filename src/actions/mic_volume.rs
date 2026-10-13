@@ -42,17 +42,12 @@ impl Default for MicVolumeSettings {
 }
 
 /// The key title: the custom title if set, else the current default input device's
-/// description (falling back to "Input" when there is no default).
+/// name (falling back to "Input" when there is no default).
 pub fn resolve_title(custom: &Option<String>, pw: &PwHandle) -> String {
 	match custom {
 		Some(t) => t.clone(),
 		None => match pw.default_source_name() {
-			Some(n) => pw
-				.sources()
-				.into_iter()
-				.find(|s| s.name == n)
-				.map(|s| s.description)
-				.unwrap_or(n),
+			Some(n) => crate::names::source(pw, &n),
 			None => "Input".to_owned(),
 		},
 	}

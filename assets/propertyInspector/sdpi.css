@@ -642,6 +642,12 @@ select {
 	font-size: 9pt;
 }
 
+.dev-row input.dev-name {
+	min-width: 0;
+	height: 24px;
+	padding: 0 4px;
+}
+
 .dev-row .dev-order {
 	color: #969696;
 	font-size: 8pt;

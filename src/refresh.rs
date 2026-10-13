@@ -20,6 +20,7 @@ use crate::actions::device_volume::{self, DeviceVolumeSettings};
 use crate::actions::input_volume::{self, InputVolumeSettings};
 use crate::actions::mic_volume::{self, MicVolumeSettings};
 use crate::actions::output::{self, OutputSettings};
+use crate::actions::switch_input::{self, SwitchInputSettings};
 use crate::actions::volume::{self, VolumeSettings};
 use crate::pw::PwHandle;
 
@@ -37,6 +38,9 @@ pub struct Refresher {
 	/// Output-toggle settings, so its key can reflect an out-of-band default-sink
 	/// change (another app, wpctl, media keys…) — active/greyed and which sink.
 	output: Arc<Mutex<HashMap<String, OutputSettings>>>,
+	/// Input-switch settings, so its key follows an out-of-band default-source
+	/// change.
+	switch_input: Arc<Mutex<HashMap<String, SwitchInputSettings>>>,
 }
 
 impl Refresher {
@@ -82,6 +86,17 @@ impl Refresher {
 
 	pub fn forget_output(&self, instance_id: &str) {
 		self.output.lock().unwrap().remove(instance_id);
+	}
+
+	pub fn set_switch_input(&self, instance_id: &str, settings: &SwitchInputSettings) {
+		self.switch_input
+			.lock()
+			.unwrap()
+			.insert(instance_id.to_owned(), settings.clone());
+	}
+
+	pub fn forget_switch_input(&self, instance_id: &str) {
+		self.switch_input.lock().unwrap().remove(instance_id);
 	}
 
 	pub fn set_volume(&self, instance_id: &str, settings: &VolumeSettings) {
@@ -139,7 +154,17 @@ pub async fn refresh_all(pw: &PwHandle, refresher: &Refresher) {
 			continue;
 		};
 		let s = output::surface(settings, pw);
-		let _ = display::output(&inst, &s.title, s.image.as_deref()).await;
+		let _ = display::picker(&inst, &s.title, s.image.as_deref()).await;
+	}
+
+	// Input switch: reflect the live default source (title + icon).
+	let switch = refresher.switch_input.lock().unwrap().clone();
+	for inst in visible_instances(switch_input::SwitchInputAction::UUID).await {
+		let Some(settings) = switch.get(&inst.instance_id) else {
+			continue;
+		};
+		let s = switch_input::surface(settings, pw, None);
+		let _ = display::picker(&inst, &s.title, s.image.as_deref()).await;
 	}
 
 	// Default source (mic) volume (bar) + title (current input device, or custom).

@@ -43,17 +43,12 @@ impl Default for VolumeSettings {
 }
 
 /// The key title: the custom title if set, else the current default output
-/// device's description (falling back to "Output" when there is no default).
+/// device's name (falling back to "Output" when there is no default).
 pub fn resolve_title(custom: &Option<String>, pw: &PwHandle) -> String {
 	match custom {
 		Some(t) => t.clone(),
 		None => match pw.default_sink_name() {
-			Some(n) => pw
-				.sinks()
-				.into_iter()
-				.find(|s| s.name == n)
-				.map(|s| s.description)
-				.unwrap_or(n),
+			Some(n) => crate::names::sink(pw, &n),
 			None => "Output".to_owned(),
 		},
 	}

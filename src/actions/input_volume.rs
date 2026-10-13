@@ -1,6 +1,8 @@
 //! Input Device Volume action: controls the volume of a specific input device (source),
 //! identified by its `node.name`. Mirrors the original plugin's "Input Volume".
 
+use std::collections::HashMap;
+
 use openaction::*;
 use serde::{Deserialize, Serialize};
 
@@ -46,21 +48,17 @@ impl Default for InputVolumeSettings {
 struct SourcesMessage {
 	event: &'static str,
 	sources: Vec<SinkDesc>,
+	names: HashMap<String, String>,
 }
 
-/// The key label: the custom name if set, else the source's friendly description
-/// (never the raw `node.name`), else "Input".
+/// The key label: the custom label if set, else the source's name (see
+/// [`crate::names::source`]), else "Input".
 pub fn label(settings: &InputVolumeSettings, pw: &PwHandle) -> String {
 	if !settings.name.is_empty() {
 		return settings.name.clone();
 	}
 	match settings.source.as_deref() {
-		Some(name) => pw
-			.sources()
-			.into_iter()
-			.find(|s| s.name == name)
-			.map(|s| s.description)
-			.unwrap_or_else(|| name.to_owned()),
+		Some(name) => crate::names::source(pw, name),
 		None => "Input".to_owned(),
 	}
 }
@@ -165,6 +163,7 @@ impl Action for InputVolumeAction {
 			.send_to_property_inspector(SourcesMessage {
 				event: "sources",
 				sources: self.pw.sources(),
+				names: crate::names::all(),
 			})
 			.await
 	}

@@ -6,6 +6,8 @@
 //!
 //! The key/encoder shows a custom label and a live level bar.
 
+use std::collections::HashMap;
+
 use openaction::*;
 use serde::{Deserialize, Serialize};
 
@@ -51,21 +53,17 @@ impl Default for DeviceVolumeSettings {
 struct SinksMessage {
 	event: &'static str,
 	sinks: Vec<SinkDesc>,
+	names: HashMap<String, String>,
 }
 
-/// The key label: the custom name if set, else the sink's friendly description
-/// (never the raw `node.name`), else "Device".
+/// The key label: the custom label if set, else the sink's name (see
+/// [`crate::names::sink`]), else "Device".
 pub fn label(settings: &DeviceVolumeSettings, pw: &PwHandle) -> String {
 	if !settings.name.is_empty() {
 		return settings.name.clone();
 	}
 	match settings.sink.as_deref() {
-		Some(name) => pw
-			.sinks()
-			.into_iter()
-			.find(|s| s.name == name)
-			.map(|s| s.description)
-			.unwrap_or_else(|| name.to_owned()),
+		Some(name) => crate::names::sink(pw, name),
 		None => "Device".to_owned(),
 	}
 }
@@ -170,6 +168,7 @@ impl Action for DeviceVolumeAction {
 			.send_to_property_inspector(SinksMessage {
 				event: "sinks",
 				sinks: self.pw.sinks(),
+				names: crate::names::all(),
 			})
 			.await
 	}

@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Volume keys can span several lines — press Enter in the *Label* field. *Fit
   to key* sizes the label so every line fits; a dial's touchstrip, which can't
   break a line, shows the lines joined by spaces.
+- **Device names of your own**: rename a device in an Output or Input Device
+  key's device list, and every key and list that shows it uses the new name.
+- **Custom icons on the Input Device key**, per device, as on the Output Device
+  key.
 
 ### Changed
 

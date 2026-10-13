@@ -7,7 +7,10 @@
 				const websocket = new WebSocket("ws://localhost:" + inPort);
 				inActionInfo = JSON.parse(inActionInfo);
 				const context = inActionInfo.context;
-				let order = (inActionInfo.payload.settings.sources ?? []).slice();
+				const settings = inActionInfo.payload.settings;
+				let order = (settings.sources ?? []).slice();
+				let icons = Object.assign({}, settings.icons ?? {});
+				let names = {};
 				let descs = {};
 				let available = [];
 
@@ -19,7 +22,7 @@
 				const add = document.getElementById("add");
 				const useCurrent = document.getElementById("useCurrent");
 				const titleInput = document.getElementById("title");
-				const savedTitle = inActionInfo.payload.settings.title;
+				const savedTitle = settings.title;
 				let customTitle = (typeof savedTitle === "string") ? savedTitle : "";
 				// Checked (no saved string) = show the current default input; unchecked
 				// = use the custom title verbatim, even when it is empty (blank title).
@@ -35,7 +38,11 @@
 					websocket.send(JSON.stringify({
 						event: "setSettings",
 						context: context,
-						payload: { sources: order, title: useCurrent.checked ? null : customTitle },
+						payload: {
+							sources: order,
+							title: useCurrent.checked ? null : customTitle,
+							icons: icons,
+						},
 					}));
 				};
 				syncTitle();
@@ -59,10 +66,14 @@
 						num.textContent = i + 1 + ".";
 						row.appendChild(num);
 
-						const label = document.createElement("span");
-						label.className = "dev-name";
-						label.textContent = descs[name] ?? name;
-						row.appendChild(label);
+						for (const el of iconControls(
+							() => icons[name] ?? null,
+							(u) => { if (u) icons[name] = u; else delete icons[name]; },
+							save,
+							render,
+						)) row.appendChild(el);
+
+						row.appendChild(nameInput(websocket, inActionInfo, name, descs[name] ?? name, names));
 
 						const up = document.createElement("button");
 						up.textContent = "▲";
@@ -81,7 +92,7 @@
 						const del = document.createElement("button");
 						del.textContent = "✕";
 						del.title = "Remove";
-						del.addEventListener("click", () => { order.splice(i, 1); save(); render(); });
+						del.addEventListener("click", () => { order.splice(i, 1); delete icons[name]; save(); render(); });
 						row.appendChild(del);
 
 						list.appendChild(row);
@@ -91,7 +102,7 @@
 					add.innerHTML = "";
 					add.appendChild(new Option("— add a device —", ""));
 					for (const s of available) {
-						if (!order.includes(s.name)) add.appendChild(new Option(s.description, s.name));
+						if (!order.includes(s.name)) add.appendChild(new Option(names[s.name] ?? s.description, s.name));
 					}
 				};
 
@@ -106,6 +117,7 @@
 					const data = JSON.parse(event.data);
 					if (data.event == "sendToPropertyInspector" && data.payload && data.payload.event == "sources") {
 						available = data.payload.sources;
+						names = data.payload.names ?? {};
 						descs = {};
 						for (const s of available) descs[s.name] = s.description;
 						render();
@@ -113,12 +125,14 @@
 				};
 			}
 		</script>
+		<script src="icon.js"></script>
 		<link rel="stylesheet" href="sdpi.css" />
 	</head>
 	<body>
 		<div class="sdpi-wrapper">
 			<div class="action-title">Input Device</div>
-			<div class="action-desc">Switch the system default input. Add several devices to cycle through them in order — each press selects the next.</div>
+			<div class="action-desc">Switch the system default input. Add several devices to cycle through them in order — each press selects the next. Give each device an icon to show which input is active, and a name of your own to show instead of the device's: the name is the device's, on every key that shows it.</div>
+			<div class="action-desc">Icons are optional: with none set here, the key keeps the image you chose in OpenDeck. The first icon set here hands the key image over to the plugin, and OpenDeck's own image is gone for good.</div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Title</div>
 				<div class="sdpi-item-value label-row">

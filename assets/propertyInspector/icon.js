@@ -84,3 +84,26 @@ const iconRow = (container, getUri, setUri, save) => {
 	};
 	redraw();
 };
+
+// A device row's name field: the device's own description as placeholder, the
+// user's name for it typed over it. Empty means the description. The name
+// belongs to the device, so the plugin keeps it for every key (setName).
+const nameInput = (websocket, inActionInfo, device, desc, names) => {
+	const inp = document.createElement("input");
+	inp.type = "text";
+	inp.className = "dev-name";
+	inp.placeholder = desc;
+	inp.title = desc;
+	inp.value = names[device] ?? "";
+	inp.addEventListener("input", () => {
+		const name = inp.value.trim();
+		if (name) names[device] = name; else delete names[device];
+		websocket.send(JSON.stringify({
+			event: "sendToPlugin",
+			action: inActionInfo.action,
+			context: inActionInfo.context,
+			payload: { event: "setName", device: device, name: name },
+		}));
+	});
+	return inp;
+};

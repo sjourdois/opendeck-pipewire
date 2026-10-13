@@ -31,7 +31,7 @@
 				let customName = settings.name ?? "";
 				// Checked = use the device's own name; unchecked frees a custom label.
 				useName.checked = !customName;
-				// The selected picker option's text is the device's friendly description.
+				// The selected picker option's text is the device's name: the user's, else its description.
 				const deviceDesc = () => (source.value && source.selectedOptions[0]) ? source.selectedOptions[0].text : "";
 				syncLabel = () => {
 					name.disabled = useName.checked;
@@ -104,7 +104,7 @@
 
 				const warning = document.getElementById("warning");
 				let current = settings.source ?? "";
-				const renderSources = (sources, loaded) => {
+				const renderSources = (sources, loaded, names = {}) => {
 					// Preserve the user's live pick across re-renders (the list can be
 					// re-delivered), falling back to the saved setting on first load.
 					current = source.value || current;
@@ -112,7 +112,7 @@
 					source.appendChild(new Option("— select input —", ""));
 					let found = false;
 					for (const s of sources) {
-						const option = new Option(s.description, s.name);
+						const option = new Option(names[s.name] ?? s.description, s.name);
 						if (s.name == current) {
 							option.selected = true;
 							found = true;
@@ -136,7 +136,7 @@
 				websocket.onmessage = (event) => {
 					const data = JSON.parse(event.data);
 					if (data.event == "sendToPropertyInspector" && data.payload && data.payload.event == "sources") {
-						renderSources(data.payload.sources, true);
+						renderSources(data.payload.sources, true, data.payload.names);
 					}
 				};
 			}

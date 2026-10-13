@@ -55,6 +55,7 @@ mod tests {
 	use crate::actions::input_volume::InputVolumeSettings;
 	use crate::actions::mic_volume::MicVolumeSettings;
 	use crate::actions::output::OutputSettings;
+	use crate::actions::switch_input::SwitchInputSettings;
 	use crate::actions::volume::VolumeSettings;
 
 	#[test]
@@ -124,5 +125,19 @@ mod tests {
 		assert_eq!(s.sinks.len(), 2);
 		assert!(s.icons.is_empty());
 		assert_eq!(s.inactive_icon, None);
+	}
+
+	#[test]
+	fn switch_input_payload() {
+		let s: SwitchInputSettings = serde_json::from_str(
+			r##"{"sources":["alsa_input.usb.a50"],"title":null,"icons":{"alsa_input.usb.a50":"data:image/png;base64,iVBORw0K"}}"##,
+		)
+		.unwrap();
+		assert_eq!(s.sources.len(), 1);
+		assert_eq!(s.icons.len(), 1);
+		// A profile saved before icons existed still loads.
+		let old: SwitchInputSettings =
+			serde_json::from_str(r##"{"sources":[],"title":"In"}"##).unwrap();
+		assert!(old.icons.is_empty());
 	}
 }

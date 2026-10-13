@@ -32,7 +32,7 @@
 				let customName = settings.name ?? "";
 				// Checked = use the device's own name; unchecked frees a custom label.
 				useName.checked = !customName;
-				// The selected picker option's text is the device's friendly description.
+				// The selected picker option's text is the device's name: the user's, else its description.
 				const deviceDesc = () => (sink.value && sink.selectedOptions[0]) ? sink.selectedOptions[0].text : "";
 				syncLabel = () => {
 					name.disabled = useName.checked;
@@ -105,7 +105,7 @@
 
 				const warning = document.getElementById("warning");
 				let current = settings.sink ?? "";
-				const renderSinks = (sinks, loaded) => {
+				const renderSinks = (sinks, loaded, names = {}) => {
 					// Preserve the user's live pick across re-renders (the list can be
 					// re-delivered), falling back to the saved setting on first load.
 					current = sink.value || current;
@@ -113,7 +113,7 @@
 					sink.appendChild(new Option("— select device —", ""));
 					let found = false;
 					for (const s of sinks) {
-						const option = new Option(s.description, s.name);
+						const option = new Option(names[s.name] ?? s.description, s.name);
 						if (s.name == current) {
 							option.selected = true;
 							found = true;
@@ -137,7 +137,7 @@
 				websocket.onmessage = (event) => {
 					const data = JSON.parse(event.data);
 					if (data.event == "sendToPropertyInspector" && data.payload && data.payload.event == "sinks") {
-						renderSinks(data.payload.sinks, true);
+						renderSinks(data.payload.sinks, true, data.payload.names);
 					}
 				};
 			}

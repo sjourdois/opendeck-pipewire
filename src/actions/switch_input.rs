@@ -3,13 +3,17 @@
 //! Holds a list of sources chosen in the property inspector; each press cycles the
 //! system default to the next one in the list. With a single source it simply
 //! switches to it. The key shows the user's custom title, or — when empty — the
-//! current default input device's name.
+//! current default input device's name, and the active source's custom icon
+//! once one is set.
+
+use std::collections::HashMap;
 
 use openaction::*;
 use serde::{Deserialize, Serialize};
 
 use crate::command::Command;
 use crate::pw::{PwHandle, SinkDesc};
+use crate::refresh::Refresher;
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 #[serde(default)]
@@ -18,16 +22,22 @@ pub struct SwitchInputSettings {
 	pub sources: Vec<String>,
 	/// Custom key title. `None` = show the current default input's name.
 	pub title: Option<String>,
+	/// Per-source custom icon (`node.name` -> data URI); the key shows the
+	/// active source's icon. As on the Output Device key, the first icon set
+	/// hands the key image over to the plugin (see [`crate::actions::output`]).
+	pub icons: HashMap<String, String>,
 }
 
 #[derive(Serialize)]
 struct SourcesMessage {
 	event: &'static str,
 	sources: Vec<SinkDesc>,
+	names: HashMap<String, String>,
 }
 
 pub struct SwitchInputAction {
 	pub pw: PwHandle,
+	pub refresher: Refresher,
 }
 
 #[async_trait]
@@ -75,7 +85,18 @@ impl Action for SwitchInputAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		self.refresher
+			.set_switch_input(&instance.instance_id, settings);
 		self.show(instance, settings, None).await
+	}
+
+	async fn will_disappear(
+		&self,
+		instance: &Instance,
+		_settings: &Self::Settings,
+	) -> OpenActionResult<()> {
+		self.refresher.forget_switch_input(&instance.instance_id);
+		Ok(())
 	}
 
 	async fn did_receive_settings(
@@ -83,6 +104,8 @@ impl Action for SwitchInputAction {
 		instance: &Instance,
 		settings: &Self::Settings,
 	) -> OpenActionResult<()> {
+		self.refresher
+			.set_switch_input(&instance.instance_id, settings);
 		self.show(instance, settings, None).await
 	}
 
@@ -95,8 +118,19 @@ impl Action for SwitchInputAction {
 			.send_to_property_inspector(SourcesMessage {
 				event: "sources",
 				sources: self.pw.sources(),
+				names: crate::names::all(),
 			})
 			.await
+	}
+
+	async fn send_to_plugin(
+		&self,
+		_instance: &Instance,
+		_settings: &Self::Settings,
+		payload: &serde_json::Value,
+	) -> OpenActionResult<()> {
+		crate::names::inspector_message(payload, &self.pw, &self.refresher).await;
+		Ok(())
 	}
 }
 
@@ -108,6 +142,34 @@ fn chosen(settings: &SwitchInputSettings) -> Vec<&str> {
 		.map(String::as_str)
 		.filter(|s| !s.is_empty())
 		.collect()
+}
+
+/// What the key should show: its title, and its image — `None` while no icon is
+/// set, leaving OpenDeck's own.
+pub struct Surface {
+	pub title: String,
+	pub image: Option<String>,
+}
+
+/// Resolve the key surface for `source` (the source just switched to, used
+/// optimistically), else the current default source. Shared by the action's own
+/// redraws and the background [`Refresher`].
+pub fn surface(settings: &SwitchInputSettings, pw: &PwHandle, source: Option<String>) -> Surface {
+	let current = source.or_else(|| pw.default_source_name());
+	let title = match &settings.title {
+		Some(t) => t.clone(),
+		None => match &current {
+			Some(n) => crate::names::source(pw, n),
+			None => "Input".to_owned(),
+		},
+	};
+	let image = (!settings.icons.is_empty()).then(|| {
+		current
+			.as_deref()
+			.and_then(|c| settings.icons.get(c).cloned())
+			.unwrap_or_else(crate::render::switch_input_icon)
+	});
+	Surface { title, image }
 }
 
 impl SwitchInputAction {
@@ -126,32 +188,14 @@ impl SwitchInputAction {
 		Some(list[idx.map_or(0, |i| (i + 1) % list.len())].to_owned())
 	}
 
-	/// A source's friendly description, falling back to its `node.name`.
-	fn describe(&self, name: &str) -> String {
-		self.pw
-			.sources()
-			.into_iter()
-			.find(|s| s.name == name)
-			.map(|s| s.description)
-			.unwrap_or_else(|| name.to_owned())
-	}
-
-	/// Set the key title: the custom title if set, else the given source (used
-	/// optimistically right after a switch) or the current default source's
-	/// description, else the "Input" placeholder.
+	/// Draw the key for `source` (see [`surface`]).
 	async fn show(
 		&self,
 		instance: &Instance,
 		settings: &SwitchInputSettings,
 		source: Option<String>,
 	) -> OpenActionResult<()> {
-		let title = match &settings.title {
-			Some(t) => t.clone(),
-			None => match source.or_else(|| self.pw.default_source_name()) {
-				Some(n) => self.describe(&n),
-				None => "Input".to_owned(),
-			},
-		};
-		crate::display::picker(instance, &title).await
+		let s = surface(settings, &self.pw, source);
+		crate::display::picker(instance, &s.title, s.image.as_deref()).await
 	}
 }
