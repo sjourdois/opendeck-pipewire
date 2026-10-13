@@ -6,9 +6,9 @@
 //!
 //! When the *current* default is not one of the chosen sinks, the behaviour is
 //! configurable (`when_inactive`): either **cycle** into the list on the next
-//! press (the default), or **disable** — the key greys out and a press does
-//! nothing until an external change (another app, wpctl, media keys…) brings
-//! the default back into the list. The key reflects the live default either way.
+//! press (the default), or **disable** — a press does nothing until an external
+//! change (another app, wpctl, media keys…) brings the default back into the
+//! list. Either way the key dims while inactive, and reflects the live default.
 
 use std::collections::HashMap;
 
@@ -26,7 +26,7 @@ pub enum WhenInactive {
 	/// Cycle into the list on the next press (original behaviour).
 	#[default]
 	Cycle,
-	/// Grey the key out; a press does nothing.
+	/// Ignore presses (the key is dimmed either way).
 	Disable,
 }
 
@@ -206,8 +206,9 @@ pub struct Surface {
 	/// The key title: the user's custom title, else the current default output's
 	/// name (what is actually active), else the "Output" placeholder.
 	pub title: String,
-	/// The key image (data URI): the active sink's custom icon, the inactive icon,
-	/// or the built-in output / greyed-output icon — and `None` when the plugin
+	/// The key image (data URI): the active sink's custom icon, else the built-in
+	/// output icon; when inactive, the inactive icon, else the key's own device
+	/// icon dimmed, else the greyed-output icon — and `None` when the plugin
 	/// doesn't draw the key at all (see [`draws_image`]), leaving whatever image
 	/// OpenDeck holds for it, the action's own or one the user picked.
 	pub image: Option<String>,
@@ -224,10 +225,9 @@ pub fn surface(settings: &OutputSettings, pw: &PwHandle) -> Surface {
 			.map(|c| describe(pw, c))
 			.unwrap_or_else(|| "Output".to_owned()),
 	};
-	let active = is_active(settings, pw) || settings.when_inactive == WhenInactive::Cycle;
 	let image = if !draws_image(settings) {
 		None
-	} else if active {
+	} else if is_active(settings, pw) {
 		Some(
 			current
 				.as_deref()
@@ -235,10 +235,21 @@ pub fn surface(settings: &OutputSettings, pw: &PwHandle) -> Surface {
 				.unwrap_or_else(crate::render::output_icon),
 		)
 	} else {
+		// The device the key stands for: the one it routes to, or the one a press
+		// selects. One key per device thus keeps its own icon, dimmed.
+		let list = chosen(settings);
+		let own = current
+			.as_deref()
+			.filter(|c| list.contains(c))
+			.or(list.first().copied());
 		Some(
 			settings
 				.inactive_icon
 				.clone()
+				.or_else(|| {
+					own.and_then(|d| settings.icons.get(d))
+						.map(|i| crate::render::dimmed(i))
+				})
 				.unwrap_or_else(crate::render::output_disabled_icon),
 		)
 	};
