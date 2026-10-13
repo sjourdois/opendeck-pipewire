@@ -186,16 +186,21 @@ impl Inner {
 			.map(|(id, _)| *id)
 	}
 
+	/// The device and hardware route a node sits on, once that route is known.
+	fn route_of(&self, n: &NodeRef) -> Option<(&DeviceRef, i32, RouteInfo)> {
+		let dev = self.devices.get(&n.device_id?)?;
+		let route_device = n.route_device?;
+		let route = dev.routes.get(&route_device)?;
+		Some((dev, route_device, *route))
+	}
+
 	/// Apply a volume/mute change to a node (sink or source), using the hardware
 	/// route when it has one (USB headsets/mics etc.), else the node's Props.
 	fn apply_node(&self, node_id: u32, linear: Option<f32>, mute: Option<bool>) {
 		let Some(n) = self.nodes.get(&node_id) else {
 			return;
 		};
-		if let (Some(dev_id), Some(route_device)) = (n.device_id, n.route_device)
-			&& let Some(dev) = self.devices.get(&dev_id)
-			&& let Some(route) = dev.routes.get(&route_device)
-		{
+		if let Some((dev, route_device, route)) = self.route_of(n) {
 			set_device_route(
 				&dev.proxy,
 				route.index,
@@ -908,7 +913,16 @@ fn update_node_from_props(inner: &Rc<RefCell<Inner>>, id: u32, pod: &pipewire::s
 	}
 
 	let mut b = inner.borrow_mut();
-	if let Some(n) = b.nodes.get_mut(&id) {
+	// A node on a hardware route takes its volume/mute from the route (see
+	// update_device_route): with a hardware mixer (`route.hw-mute`, e.g. a USB
+	// webcam mic) its own Props keep reporting mute=false / volume 1.0 while the
+	// route is muted, so reading them here would clobber the real state — and
+	// the next redraw, from any other node's change, would show it unmuted.
+	// Re-read the route instead, so a change made through the node still lands.
+	if let Some((dev, _, _)) = b.nodes.get(&id).and_then(|n| b.route_of(n)) {
+		dev.proxy
+			.enum_params(0, Some(pipewire::spa::param::ParamType::Route), 0, u32::MAX);
+	} else if let Some(n) = b.nodes.get_mut(&id) {
 		if let Some(l) = linear_avg {
 			n.volume_cubic = linear_to_cubic(l);
 		}

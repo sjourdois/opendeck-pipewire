@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A muted webcam no longer shows as unmuted**: on a device with a hardware
+  mute (e.g. a Logitech BRIO mic), PipeWire reports the node itself as unmuted
+  while its route is muted. The plugin took that at its word, so the mic key
+  flipped back to unmuted on the next redraw — for instance when turning the
+  output volume dial — and pressing it again only re-sent "mute". A node on a
+  hardware route now takes its volume and mute from that route only.
+
 ## [0.4.0]
 
 ### Added
