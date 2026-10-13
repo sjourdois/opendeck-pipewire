@@ -43,6 +43,9 @@ pub struct OutputSettings {
 	pub when_inactive: WhenInactive,
 	/// Custom key title. `None` = show the current default output's name.
 	pub title: Option<String>,
+	/// Per-sink custom name (`node.name` -> name), shown instead of the device's
+	/// own description when the key shows the current output.
+	pub names: HashMap<String, String>,
 	/// Per-sink custom icon (`node.name` -> data URI) chosen in the property
 	/// inspector; the key shows the active sink's icon.
 	pub icons: HashMap<String, String>,
@@ -221,7 +224,7 @@ pub fn surface(settings: &OutputSettings, pw: &PwHandle) -> Surface {
 		Some(t) => t.clone(),
 		None => current
 			.as_deref()
-			.map(|c| describe(pw, c))
+			.map(|c| describe(settings, pw, c))
 			.unwrap_or_else(|| "Output".to_owned()),
 	};
 	let active = is_active(settings, pw) || settings.when_inactive == WhenInactive::Cycle;
@@ -245,8 +248,12 @@ pub fn surface(settings: &OutputSettings, pw: &PwHandle) -> Surface {
 	Surface { title, image }
 }
 
-/// A sink's friendly description, falling back to its `node.name`.
-fn describe(pw: &PwHandle, name: &str) -> String {
+/// A sink's name on the key: its custom name, else its description, else its
+/// `node.name`.
+fn describe(settings: &OutputSettings, pw: &PwHandle, name: &str) -> String {
+	if let Some(n) = settings.names.get(name).filter(|n| !n.is_empty()) {
+		return n.clone();
+	}
 	pw.sinks()
 		.into_iter()
 		.find(|s| s.name == name)
@@ -281,6 +288,6 @@ impl OutputAction {
 	/// Draw the key from the current default + settings.
 	async fn render(&self, instance: &Instance, settings: &OutputSettings) -> OpenActionResult<()> {
 		let s = surface(settings, &self.pw);
-		crate::display::output(instance, &s.title, s.image.as_deref()).await
+		crate::display::picker(instance, &s.title, s.image.as_deref()).await
 	}
 }

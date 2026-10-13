@@ -31,6 +31,12 @@ pub fn output_disabled_icon() -> String {
 	data_uri(include_str!("../assets/icons/outputDisabled.svg"))
 }
 
+/// The Input Device key icon as a data URI: what a source without its own
+/// custom icon shows, once the key has any.
+pub fn switch_input_icon() -> String {
+	data_uri(include_str!("../assets/icons/switchInput.svg"))
+}
+
 /// A bold slash drawn corner-to-corner across the whole key to signal mute, in
 /// the configured mute colour. Overlaid last (on top of the label/bar) by the
 /// keypad renderers when muted; empty when unmuted.

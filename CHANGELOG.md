@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Custom device names on the Output and Input Device keys**: each device in
+  the list can be given a name to show instead of its own.
+- **Custom icons on the Input Device key**, per device, as on the Output Device
+  key.
+
 ### Fixed
 
 - A device with a hardware mute no longer shows as unmuted on the next redraw.

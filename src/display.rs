@@ -291,22 +291,16 @@ async fn put_title(instance: &Instance, text: &str) -> OpenActionResult<()> {
 	}
 }
 
-/// A device picker (switch-input): set the plugin's default title to the selected
-/// device name. The user can override the title, and on an encoder the icon is
-/// theirs too.
-pub async fn picker(instance: &Instance, name: &str) -> OpenActionResult<()> {
-	put_title(instance, name).await
-}
-
-/// Output toggle surface: `title` (the current default output, or the user's
-/// custom title), plus `image` — the icon resolved from the settings, or `None`
-/// when the plugin doesn't draw this key (see [`crate::actions::output::Surface`]),
-/// in which case the image OpenDeck holds for it is left untouched.
+/// A device picker key (Output / Input Device): `title` (the current default
+/// device, or the user's custom title), plus `image` — the icon resolved from the
+/// settings, or `None` when the plugin doesn't draw this key (see
+/// [`crate::actions::output::Surface`]), in which case the image OpenDeck holds
+/// for it is left untouched.
 ///
 /// The key stays a single state so OpenDeck keeps the user's title font/position;
 /// the greyed look is a swapped image rather than a second state. On an encoder the
 /// title is the only surface (the dial keeps its own icon).
-pub async fn output(instance: &Instance, title: &str, image: Option<&str>) -> OpenActionResult<()> {
+pub async fn picker(instance: &Instance, title: &str, image: Option<&str>) -> OpenActionResult<()> {
 	put_title(instance, title).await?;
 	let Some(image) = image else { return Ok(()) };
 	if is_encoder(instance) {

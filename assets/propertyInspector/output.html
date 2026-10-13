@@ -10,6 +10,7 @@
 				const settings = inActionInfo.payload.settings;
 				let order = (settings.sinks ?? []).slice();
 				let icons = Object.assign({}, settings.icons ?? {});
+				let names = Object.assign({}, settings.names ?? {});
 				let inactiveIcon = (typeof settings.inactive_icon === "string") ? settings.inactive_icon : null;
 				let descs = {};
 				let available = [];
@@ -49,6 +50,7 @@
 							stream: stream === "" ? null : stream,
 							when_inactive: wi ? wi.value : "cycle",
 							title: useCurrent.checked ? null : customTitle,
+							names: names,
 							icons: icons,
 							inactive_icon: inactiveIcon,
 						},
@@ -89,10 +91,12 @@
 							render,
 						)) row.appendChild(el);
 
-						const label = document.createElement("span");
-						label.className = "dev-name";
-						label.textContent = descs[name] ?? name;
-						row.appendChild(label);
+						row.appendChild(nameInput(
+							descs[name] ?? name,
+							() => names[name],
+							(n) => { if (n) names[name] = n; else delete names[name]; },
+							save,
+						));
 
 						const up = document.createElement("button");
 						up.textContent = "▲";
@@ -111,7 +115,7 @@
 						const del = document.createElement("button");
 						del.textContent = "✕";
 						del.title = "Remove";
-						del.addEventListener("click", () => { order.splice(i, 1); delete icons[name]; save(); render(); });
+						del.addEventListener("click", () => { order.splice(i, 1); delete icons[name]; delete names[name]; save(); render(); });
 						row.appendChild(del);
 
 						list.appendChild(row);
@@ -173,7 +177,7 @@
 	<body>
 		<div class="sdpi-wrapper">
 			<div class="action-title">Output Device</div>
-			<div class="action-desc">Switch the system default output. Add several devices to cycle through them in order — each press selects the next. Give each device an icon to show which output is active.</div>
+			<div class="action-desc">Switch the system default output. Add several devices to cycle through them in order — each press selects the next. Give each device an icon to show which output is active, and a name of your own to show instead of the device's.</div>
 			<div class="action-desc">Icons are optional: with none set here, and "Cycle" below, the key keeps the image you chose in OpenDeck. The first icon set here — per device, when inactive, or the greyed-out look of "Disable" — hands the key image over to the plugin, and OpenDeck's own image is gone for good.</div>
 			<div class="sdpi-item">
 				<div class="sdpi-item-label">Title</div>

@@ -83,7 +83,11 @@ async fn main() -> OpenActionResult<()> {
 		refresher: refresher.clone(),
 	})
 	.await;
-	register_action(switch_input::SwitchInputAction { pw: pw.clone() }).await;
+	register_action(switch_input::SwitchInputAction {
+		pw: pw.clone(),
+		refresher: refresher.clone(),
+	})
+	.await;
 	register_action(push_to_talk::PushToTalkAction { pw: pw.clone() }).await;
 
 	// Re-render visible keys whenever PipeWire state changes out-of-band (volume

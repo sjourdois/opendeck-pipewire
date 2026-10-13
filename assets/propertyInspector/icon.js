@@ -84,3 +84,16 @@ const iconRow = (container, getUri, setUri, save) => {
 	};
 	redraw();
 };
+
+// A device row's name field: the device's own description as placeholder, a
+// custom name typed over it. Empty means the description.
+const nameInput = (desc, getName, setName, save) => {
+	const inp = document.createElement("input");
+	inp.type = "text";
+	inp.className = "dev-name";
+	inp.placeholder = desc;
+	inp.title = desc;
+	inp.value = getName() ?? "";
+	inp.addEventListener("input", () => { setName(inp.value.trim()); save(); });
+	return inp;
+};
