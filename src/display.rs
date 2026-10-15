@@ -122,10 +122,12 @@ async fn bar(
 	if is_encoder(instance) {
 		// The touchstrip shows the value + level bar and the `title` (the resolved
 		// surface label — custom label or device name — mirroring what the keypad
-		// draws in its image); a configured icon overrides the dial icon.
+		// draws in its image, on one line); a configured icon overrides the dial
+		// icon.
+		let title = render::one_line(surface.label.text);
 		instance
 			.set_feedback(&render::bar_feedback(
-				surface.label.text,
+				&title,
 				surface.known,
 				surface.volume_cubic,
 				surface.muted,
@@ -138,14 +140,15 @@ async fn bar(
 		// state for a recognizable preview. The state text doubles as the strip
 		// title (OpenDeck prefers it over the feedback title), so it stays a
 		// single clean label: the value already has its own touchstrip slot, and
-		// a newline would render as tofu there (Noto has no U+000A glyph).
+		// a newline would render as tofu there (Noto has no U+000A glyph) —
+		// which is also why a multiline label goes out joined into one line.
 		//
 		// The image is only ever *set*, never cleared: `set_image(None)` resets
 		// the dial to the action's default and takes OpenDeck's own picture with
 		// it, for good (see [`crate::actions::output`]).
 		let preview = Preview {
 			icon: surface.ui.icon().map(str::to_owned),
-			title: surface.label.custom.then(|| surface.label.text.to_owned()),
+			title: surface.label.custom.then_some(title),
 		};
 		let changed = PREVIEW
 			.lock()

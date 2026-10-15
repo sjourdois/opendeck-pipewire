@@ -49,6 +49,12 @@ window only gets it if the label is one you typed, since that preview's title is
 the field OpenDeck's own dial editor writes to and the plugin leaves it to you
 otherwise.
 
+On a keypad key the label is **fitted to the key** by default: a long device or
+app name shrinks until it fits, down to a legible minimum, and is cut past that.
+The property inspector's *Label size* slider sets a fixed size instead.
+A custom label can span several lines (press Enter in the *Label* field); they
+are centred above the bar, and on a dial's touchstrip are joined into one line.
+
 The **Output Device** key leaves its image to OpenDeck — the action's icon, or one
 you picked in OpenDeck's own key editor — until the property inspector asks for an
 icon only the plugin can pick: a per-device icon, an icon for when the key is
@@ -62,6 +68,10 @@ square when you pick it, so nothing is stretched — and an optional **limit to 
 (otherwise volume can boost to 150%). When muted, a keypad key gets a bold diagonal
 slash in the mute colour; on a Stream Deck+ touchstrip (which can't draw the slash)
 the value and bar turn the mute colour instead.
+
+The bar is full at 100%. Past that it compresses to span 0–150%: green up to
+100%, orange up to 130%, red beyond. A touchstrip bar takes one colour, so there
+it turns orange, then red.
 
 When the target stream is **unavailable** — no default device, a configured device
 that's gone, an app that isn't playing — the key and the encoder touchstrip show

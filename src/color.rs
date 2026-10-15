@@ -13,6 +13,10 @@ pub const ACTIVE: &str = "#3db36b";
 pub const MUTE: &str = "#ff3b30";
 /// Level-bar / value colour when the audio stream is unavailable (default yellow).
 pub const UNAVAILABLE: &str = "#eab308";
+/// Level-bar colour for boost past 100%, up to [`crate::render`]'s warning level…
+pub const BOOST: &str = "#f08c2e";
+/// … and for boost past it.
+pub const OVERDRIVE: &str = "#ff3b30";
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
