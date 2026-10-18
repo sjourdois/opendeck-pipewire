@@ -1,8 +1,9 @@
 //! Shared per-instance appearance settings for the volume actions.
 //!
-//! Flattened into each volume action's settings (`icon` / `limit_100`). All
-//! fields are optional / backward compatible: profiles saved before these
-//! settings existed deserialize to "no icon, no limit".
+//! Flattened into each volume action's settings (`icon` / `limit_100` /
+//! `label_size`). All fields are optional / backward compatible: profiles saved
+//! before these settings existed deserialize to "no icon, no limit, auto-sized
+//! label".
 
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +22,10 @@ pub struct VolumeUi {
 	/// When true, volume increases through this action stop at 100% instead of
 	/// allowing the +50% boost range.
 	pub limit_100: bool,
+	/// Font size of the keypad key's label, for the actions that draw one
+	/// (device / input / app volume). `None` sizes it to fit the key. Not used on
+	/// the encoder touchstrip, whose title size the layout fixes.
+	pub label_size: Option<u8>,
 }
 
 impl VolumeUi {

@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Resizable key labels**: the Device, Input Device and App Volume keys have a
+  *Label size* setting. *Fit to key* (the default) shrinks a long label until
+  it fits, rather than letting it run off both edges; a size picked on the
+  slider is kept, and the label cut to what fits at it. Keypad only: the dial
+  touchstrip's title size is set by its layout.
+- **Multiline key labels**: a custom label on the Device, Input Device and App
+  Volume keys can span several lines — press Enter in the *Label* field. *Fit
+  to key* sizes the label so every line fits; a dial's touchstrip, which can't
+  break a line, shows the lines joined by spaces.
+
+### Changed
+
+- **Roomier key layout**: the level bar sits closer to the bottom edge, with the
+  same margin above the label (or icon) as below the bar, and the label is
+  centred in the space between — so a multiline label gets more height.
+- **Boost on the level bar**: the bar is full at 100%; boosted past it, it
+  compresses to span 0–150%, green to 100%, orange to 130% and red beyond
+  (previously a boosted bar just stayed full; orange on the percentage keys).
+  A dial's touchstrip bar compresses the same way, turning orange, then red.
+
 ### Fixed
 
 - A device with a hardware mute no longer shows as unmuted on the next redraw.

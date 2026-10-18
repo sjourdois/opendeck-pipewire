@@ -685,6 +685,7 @@ select {
 	align-items: center;
 	gap: 8px;
 	width: 100%;
+	min-width: 0;
 }
 
 .icon-btn {
@@ -716,12 +717,39 @@ select {
 	cursor: pointer;
 }
 
-.label-row input[type="text"] {
+.label-row input[type="text"],
+.label-row textarea {
 	flex: 1 1 auto;
 	min-width: 0;
 }
 
-.label-row input[type="text"]:disabled {
+/* The multiline label field: one row tall like a text input until the label
+   has more lines (rows is kept in step by the inspector's script). */
+.label-row textarea {
+	width: auto;
+	height: auto;
+	min-height: 0;
+	padding: 2px 4px;
+	line-height: 1.5em;
+	font-family: inherit;
+	white-space: pre;
+	overflow: hidden;
+}
+
+.label-row input[type="range"] {
+	flex: 1 1 0;
+	width: auto;
+	min-width: 0;
+	margin: 0;
+}
+
+.label-row input[type="range"]:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.label-row input[type="text"]:disabled,
+.label-row textarea:disabled {
 	opacity: 0.5;
 	color: #969696;
 	cursor: default;

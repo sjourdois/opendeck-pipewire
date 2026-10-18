@@ -6,6 +6,7 @@
 			let update = () => {};
 			let syncStep = () => {};
 			let syncLabel = () => {};
+			let syncSize = () => {};
 
 			function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
 				const websocket = new WebSocket("ws://localhost:" + inPort);
@@ -46,11 +47,27 @@
 				syncLabel = () => {
 					name.disabled = useName.checked;
 					name.value = useName.checked ? (appDesc() || current) : customName;
+					fitRows();
 				};
-				name.addEventListener("input", () => { customName = name.value; });
+				// One row per line of the label, so a multiline one shows whole.
+				const fitRows = () => { name.rows = Math.max(1, name.value.split("\n").length); };
+				name.addEventListener("input", () => { customName = name.value; fitRows(); });
 
 				const limit = document.getElementById("limit");
 				limit.checked = settings.limit_100 ?? false;
+
+				// The keypad label's font size: fitted to the key unless a size is set.
+				const autoSize = document.getElementById("autoSize");
+				const labelSize = document.getElementById("labelSize");
+				const labelSizeValue = document.getElementById("labelSizeValue");
+				autoSize.checked = settings.label_size == null;
+				labelSize.value = settings.label_size ?? 40;
+				syncSize = () => {
+					labelSize.disabled = autoSize.checked;
+					labelSizeValue.innerText = autoSize.checked ? "fit" : labelSize.value + "px";
+				};
+				labelSize.addEventListener("input", syncSize);
+				syncSize();
 
 				const iconBox = document.getElementById("icon");
 				let icon = settings.icon || null;
@@ -59,6 +76,8 @@
 				const isKeypad = inActionInfo.payload.controller != "Encoder";
 				if (!isKeypad) direction.style.display = "none";
 				if (!isKeypad) document.getElementById("iconNote").style.display = "";
+				// A dial's touchstrip title has a size fixed by the layout.
+				if (!isKeypad) document.getElementById("sizeRow").style.display = "none";
 				const stepRow = document.getElementById("stepRow");
 				syncStep = () => { stepRow.style.display = (isKeypad && mode.value == "mute") ? "none" : ""; };
 				syncStep();
@@ -82,6 +101,7 @@
 							unavailable_color: unavailable.value,
 							icon: icon,
 							limit_100: limit.checked,
+							label_size: autoSize.checked ? null : parseInt(labelSize.value, 10),
 						},
 					}));
 				};
@@ -144,7 +164,15 @@
 				<div class="sdpi-item-value label-row">
 					<input id="useName" type="checkbox" onchange="update(); syncLabel()" />
 					<label for="useName" class="cap">Application name</label>
-					<input id="name" type="text" placeholder="Custom label" onchange="update()" />
+					<textarea id="name" rows="1" placeholder="Custom label" title="Enter starts a new line on the key" onchange="update()"></textarea>
+				</div>
+			</div>
+			<div class="sdpi-item" id="sizeRow">
+				<div class="sdpi-item-label">Label size (<span id="labelSizeValue">fit</span>)</div>
+				<div class="sdpi-item-value label-row">
+					<input id="autoSize" type="checkbox" onchange="update(); syncSize()" />
+					<label for="autoSize" class="cap">Fit to key</label>
+					<input id="labelSize" type="range" min="14" max="56" value="40" onchange="update()" />
 				</div>
 			</div>
 			<div class="sdpi-item" id="direction">
