@@ -8,13 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Resizable key labels**: the Device, Input Device and App Volume keys have a
-  *Label size* setting. *Fit to key* (the default) shrinks a long label until
+- **Resizable key labels**: the Output Device Volume, Input Device Volume and App
+  Volume keys have a *Label size* setting. *Fit to key* (the default) shrinks a long label until
   it fits, rather than letting it run off both edges; a size picked on the
   slider is kept, and the label cut with an ellipsis to what fits at it.
   Keypad only: the dial touchstrip's title size is set by its layout.
-- **Multiline key labels**: a custom label on the Device, Input Device and App
-  Volume keys can span several lines — press Enter in the *Label* field. *Fit
+- **Multiline key labels**: a custom label on the Output Device Volume, Input
+  Device Volume and App Volume keys can span several lines — press Enter in the *Label* field. *Fit
   to key* sizes the label so every line fits; a dial's touchstrip, which can't
   break a line, shows the lines joined by spaces.
 - **Device names of your own**: rename a device in an Output or Input Device
@@ -193,7 +193,7 @@ dedicated Mute action), and **no Node.js or Wine** at runtime.
 - Native volume/mute control via the `pipewire` crate: node `Props` for software
   sinks, and the owning device's active `Route` for hardware-mixer devices (USB
   headsets etc.), chosen automatically — including across live hardware-profile
-  switches (e.g. Astro A50 game↔chat).
+  switches (e.g. a headset's game↔chat profiles).
 - Default sink/source switching via the `default` PipeWire metadata.
 - Live key images (volume bars, device/app labels) rendered as SVG.
 - GPL-3.0-or-later license, CI (fmt + clippy + build) and a release workflow that

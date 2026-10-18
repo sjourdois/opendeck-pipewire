@@ -102,7 +102,7 @@ Keys re-render **live** when a device's volume or mute changes outside the plugi
 channel.
 
 Volume changes are applied on the **device Route** for sinks with a hardware
-mixer (USB headsets such as the Astro A50) and on the **node Props** for software
+mixer (such as USB headsets) and on the **node Props** for software
 sinks — chosen automatically, including across live hardware-profile switches.
 
 > **Linux only.** This plugin talks to PipeWire directly; there is no PulseAudio
@@ -116,7 +116,11 @@ sinks — chosen automatically, including across live hardware-profile switches.
 
 ## Install
 
-**Manual install** (until published to the OpenDeck plugin store):
+Install **PipeWire Audio (Native)** from OpenDeck's plugin store; OpenDeck then
+offers each new release as an update.
+
+**Manual install:** unzip a release's `fr.jourdois.pipewire.sdPlugin.zip` into
+`~/.config/opendeck/plugins/` and restart OpenDeck, or build it yourself:
 
 1. Build the binary (see below).
 2. Assemble the plugin directory `fr.jourdois.pipewire.sdPlugin/`:
