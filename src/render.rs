@@ -238,7 +238,8 @@ fn label_height(lines: usize, s: f32) -> f32 {
 /// size to draw them at: `size` if the user picked one, else the largest that
 /// fits every line whole, both across and stacked up the key (within the auto
 /// range). Lines still too long at that size are cut to the characters that fit,
-/// and lines that don't fit above the bar are dropped, keeping at least the first.
+/// and lines that don't fit above the bar are dropped, keeping at least the first;
+/// either way the cut shows as an ellipsis (see [`ellipsize`]).
 fn fit_label(label: &str, size: Option<u8>, with_icon: bool) -> (Vec<String>, i32) {
 	let mut lines: Vec<&str> = label
 		.lines()
@@ -267,12 +268,24 @@ fn fit_label(label: &str, size: Option<u8>, with_icon: bool) -> (Vec<String>, i3
 	let s = size as f32;
 	let rows = (((room - label_height(1, s)) / (LINE_EM * s)).max(0.0) as usize) + 1;
 	let fits = ((LABEL_WIDTH / (GLYPH_EM * s)) as usize).max(1);
+	let dropped = lines.len() > rows;
 	let lines = lines
 		.into_iter()
 		.take(rows)
-		.map(|l| l.chars().take(fits).collect())
+		.enumerate()
+		.map(|(i, l)| ellipsize(l, fits, dropped && i + 1 == rows))
 		.collect();
 	(lines, size)
+}
+
+/// `line` as is if it fits in `fits` characters, else cut to end in an ellipsis
+/// within them; `more` (lines dropped after this one) forces the ellipsis.
+fn ellipsize(line: &str, fits: usize, more: bool) -> String {
+	if !more && line.chars().count() <= fits {
+		return line.to_owned();
+	}
+	let kept: String = line.chars().take(fits - 1).collect();
+	format!("{}…", kept.trim_end())
 }
 
 /// A labelled level-bar key/encoder: a custom label with a level bar (no
@@ -450,22 +463,32 @@ mod tests {
 		assert_eq!(lines, ["Headphones"]);
 		assert!((LABEL_MIN..40).contains(&size));
 		// Past the legible minimum the label is cut, not shrunk further.
-		let long = "Built-in Audio Analog Stereo";
-		let (lines, size) = fit_label(long, None, false);
+		let (lines, size) = fit_label("Built-in Audio Analog Stereo", None, false);
 		assert_eq!(size, LABEL_MIN);
-		assert!(lines[0].len() < long.len() && long.starts_with(&lines[0]));
+		assert_eq!(lines, ["Built-in A…"]);
+	}
+
+	#[test]
+	fn ellipsis_marks_a_cut() {
+		assert_eq!(ellipsize("Speakers", 8, false), "Speakers");
+		assert_eq!(ellipsize("Speakers", 5, false), "Spea…");
+		// No space left dangling before the ellipsis.
+		assert_eq!(ellipsize("Desk Speakers", 6, false), "Desk…");
+		// A whole line followed by dropped ones still ends in one.
+		assert_eq!(ellipsize("Game", 8, true), "Game…");
+		assert_eq!(ellipsize("Speakers", 1, false), "…");
 	}
 
 	#[test]
 	fn picked_label_size_is_kept_and_cut_to_fit() {
 		let (lines, size) = fit_label("Headphones", Some(50), false);
 		assert_eq!(size, 50);
-		assert!("Headphones".starts_with(&lines[0]) && lines[0].len() < 10);
+		assert_eq!(lines, ["He…"]);
 		// Out-of-range sizes (a hand-edited profile) are clamped.
 		assert_eq!(fit_label("A", Some(200), false).1, LABEL_MAX);
 		assert_eq!(fit_label("A", Some(1), false).1, LABEL_MIN);
 		// A non-ASCII label is cut on a character boundary.
-		assert_eq!(fit_label("Écouteurs sans fil", Some(56), false).0, ["Éc"]);
+		assert_eq!(fit_label("Écouteurs sans fil", Some(56), false).0, ["É…"]);
 	}
 
 	#[test]
@@ -486,11 +509,12 @@ mod tests {
 	fn lines_past_the_top_are_dropped() {
 		// At a picked size only what fits above the bar is kept…
 		let (lines, _) = fit_label("A\nB\nC", Some(56), false);
-		assert_eq!(lines, ["A"]);
+		assert_eq!(lines, ["A…"]);
 		// … and at the legible minimum, the excess of a long list.
 		let (lines, size) = fit_label("1\n2\n3\n4\n5\n6\n7\n8", None, false);
 		assert_eq!(size, LABEL_MIN);
 		assert!((2..8).contains(&lines.len()) && lines[0] == "1");
+		assert!(lines.last().unwrap().ends_with('…'));
 	}
 
 	#[test]

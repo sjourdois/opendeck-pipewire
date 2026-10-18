@@ -50,8 +50,9 @@ the field OpenDeck's own dial editor writes to and the plugin leaves it to you
 otherwise.
 
 On a keypad key the label is **fitted to the key** by default: a long device or
-app name shrinks until it fits, down to a legible minimum, and is cut past that.
-The property inspector's *Label size* slider sets a fixed size instead.
+app name shrinks until it fits, down to a legible minimum, and is cut with an
+ellipsis past that. The property inspector's *Label size* slider sets a fixed
+size instead.
 A custom label can span several lines (press Enter in the *Label* field); they
 are centred above the bar, and on a dial's touchstrip are joined into one line.
 
