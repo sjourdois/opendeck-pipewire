@@ -49,12 +49,13 @@ window only gets it if the label is one you typed, since that preview's title is
 the field OpenDeck's own dial editor writes to and the plugin leaves it to you
 otherwise.
 
-On a keypad key the label is **fitted to the key** by default: a long device or
-app name shrinks until it fits, down to a legible minimum, and is cut with an
-ellipsis past that. The property inspector's *Label size* slider sets a fixed
-size instead.
-A custom label can span several lines (press Enter in the *Label* field); they
-are centred above the bar, and on a dial's touchstrip are joined into one line.
+The Device Volume and App Volume keys draw that label above their level bar,
+**fitted to the key** by default: a long device or app name shrinks until it
+fits, down to a legible minimum, and is cut with an ellipsis past that. The
+property inspector's *Label size* slider sets a fixed size instead. A custom
+label can span several lines (press Enter in the *Label* field); they are
+centred above the bar, the last one shown ends in an ellipsis when the rest
+don't fit, and on a dial's touchstrip they are joined into one line.
 
 The **Output Device** key leaves its image to OpenDeck — the action's icon, or one
 you picked in OpenDeck's own key editor — until the property inspector asks for an
