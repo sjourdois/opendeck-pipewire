@@ -177,3 +177,6 @@ GPL-3.0-or-later — see [`LICENSE`](LICENSE). (OpenDeck is GPL-3.0-or-later; th
 - [Maximilian Hildebrand (m10x)](https://github.com/m10x) — volume appearance
   options, the unavailable state and dial previews
   ([#1](https://github.com/sjourdois/opendeck-pipewire/pull/1)).
+- [Matthew Quinton (MJQ7)](https://github.com/MJQ7) — resizable and multiline key
+  labels, and the boost on the level bar
+  ([#4](https://github.com/sjourdois/opendeck-pipewire/pull/4)).
