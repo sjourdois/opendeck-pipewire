@@ -16,7 +16,7 @@ pub const UNAVAILABLE: &str = "#eab308";
 /// Level-bar colour for boost past 100%, up to [`crate::render`]'s warning level…
 pub const BOOST: &str = "#f08c2e";
 /// … and for boost past it.
-pub const OVERDRIVE: &str = "#ff3b30";
+pub const OVERDRIVE: &str = "#d946ef";
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]

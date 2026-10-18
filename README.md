@@ -72,8 +72,8 @@ slash in the mute colour; on a Stream Deck+ touchstrip (which can't draw the sla
 the value and bar turn the mute colour instead.
 
 The bar is full at 100%. Past that it compresses to span 0–150%: green up to
-100%, orange up to 130%, red beyond. A touchstrip bar takes one colour, so there
-it turns orange, then red.
+100%, orange up to 130%, magenta beyond. A touchstrip bar takes one colour, so
+there it turns orange, then magenta.
 
 When the target stream is **unavailable** — no default device, a configured device
 that's gone, an app that isn't playing — the key and the encoder touchstrip show

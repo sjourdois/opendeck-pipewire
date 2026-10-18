@@ -26,7 +26,7 @@ const BAR_X: f32 = 14.0;
 const BAR_W: f32 = 100.0;
 /// The level a boosted bar spans end to end (the most a volume action allows)…
 const BOOST_MAX: f32 = 1.5;
-/// … and the level past which its boost turns from orange to red.
+/// … and the level past which its boost turns from orange to magenta.
 const BOOST_WARN: f32 = 1.3;
 
 /// Whether a level is boosted past 100% (with slack for float noise).
@@ -34,7 +34,7 @@ fn boosted(volume_cubic: f32) -> bool {
 	volume_cubic > 1.001
 }
 
-/// The colour of a boosted bar's topmost segment: orange, or red past
+/// The colour of a boosted bar's topmost segment: orange, or magenta past
 /// [`BOOST_WARN`].
 fn boost_color(volume_cubic: f32) -> &'static str {
 	if volume_cubic > BOOST_WARN + 0.001 {
@@ -58,7 +58,7 @@ fn bar_fraction(volume_cubic: f32) -> f32 {
 /// The level bar: a dark track filled to the level. Up to 100% the fill is one
 /// colour (`fill`: the active or mute colour). Past it the bar compresses (see
 /// [`bar_fraction`]) and, unless muted, the boost shows in segments after the
-/// green: orange up to [`BOOST_WARN`], red beyond. The segments are clipped to
+/// green: orange up to [`BOOST_WARN`], magenta beyond. The segments are clipped to
 /// the fill's rounded outline, so only the bar's ends are rounded.
 fn level_bar(volume_cubic: f32, muted: bool, colors: &BarColors) -> String {
 	let fill = colors.bar(muted);
@@ -544,7 +544,7 @@ mod tests {
 	}
 
 	#[test]
-	fn boost_draws_green_then_orange_then_red() {
+	fn boost_draws_green_then_orange_then_magenta() {
 		let c = BarColors::default();
 		let plain = level_bar(1.0, false, &c);
 		assert!(plain.contains(r#"width="100.0""#) && !plain.contains(BOOST));
@@ -553,10 +553,10 @@ mod tests {
 		assert!(warm.contains(r#"<clipPath id="level"><rect x="14" y="104" width="80.0""#));
 		assert!(warm.contains(r##"x="14.0" y="104" width="66.7" height="12" fill="#3db36b""##));
 		assert!(warm.contains(BOOST) && !warm.contains(OVERDRIVE));
-		// 140%: orange stops at 130%, red takes over.
+		// 140%: orange stops at 130%, magenta takes over.
 		let hot = level_bar(1.4, false, &c);
 		assert!(hot.contains(r##"x="80.7" y="104" width="20.0" height="12" fill="#f08c2e""##));
-		assert!(hot.contains(r##"x="100.7" y="104" width="6.7" height="12" fill="#ff3b30""##));
+		assert!(hot.contains(r##"x="100.7" y="104" width="6.7" height="12" fill="#d946ef""##));
 		// Muted, a boosted bar is compressed but drawn in the mute colour alone.
 		let muted = level_bar(1.4, true, &c);
 		assert!(!muted.contains(BOOST) && muted.contains(r#"width="93.3""#));

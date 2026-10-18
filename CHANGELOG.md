@@ -24,9 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same margin above the label (or icon) as below the bar, and the label is
   centred in the space between — so a multiline label gets more height.
 - **Boost on the level bar**: the bar is full at 100%; boosted past it, it
-  compresses to span 0–150%, green to 100%, orange to 130% and red beyond
+  compresses to span 0–150%, green to 100%, orange to 130% and magenta beyond
   (previously a boosted bar just stayed full; orange on the percentage keys).
-  A dial's touchstrip bar compresses the same way, turning orange, then red.
+  A dial's touchstrip bar compresses the same way, turning orange, then
+  magenta.
 
 ### Fixed
 
