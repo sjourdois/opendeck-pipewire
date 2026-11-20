@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Virtual devices** (`Audio/Sink/Virtual`, `Audio/Source/Virtual`) appear in
+  the device lists and can be switched to.
+
 ### Fixed
 
 - **Input Device switches the input again** when a default input was once picked

@@ -103,7 +103,9 @@ channel.
 
 **Output Device** and **Input Device** set the *configured* default, as
 `wpctl set-default` does, so WirePlumber keeps the choice instead of falling back
-to a device picked earlier in another tool.
+to a device picked earlier in another tool. Virtual devices
+(`Audio/Sink/Virtual`, `Audio/Source/Virtual`), such as a filter chain's
+noise-cancelled mic, are listed with the others.
 
 Volume changes are applied on the **device Route** for sinks with a hardware
 mixer (such as USB headsets) and on the **node Props** for software

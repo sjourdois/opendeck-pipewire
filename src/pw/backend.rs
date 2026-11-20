@@ -383,8 +383,8 @@ fn on_global(
 	match global.type_ {
 		ObjectType::Node => {
 			let media_class = props.get("media.class").unwrap_or("");
-			let is_sink = media_class == "Audio/Sink";
-			let is_source = media_class == "Audio/Source";
+			let is_sink = is_class(media_class, "Audio/Sink");
+			let is_source = is_class(media_class, "Audio/Source");
 			// Only streams carrying an `application.name` count as apps; this
 			// excludes the internal combine/loopback streams (which have none).
 			let app_name: Option<String> = props.get("application.name").map(str::to_owned);
@@ -1028,9 +1028,32 @@ fn update_device_route(inner: &Rc<RefCell<Inner>>, dev_id: u32, pod: &pipewire::
 }
 
 /// PipeWire `channelVolumes` are linear; the user-facing scale is cubic.
+/// Whether `media_class` is `class` or one of its subclasses, such as
+/// `Audio/Source/Virtual` for `Audio/Source`.
+fn is_class(media_class: &str, class: &str) -> bool {
+	media_class
+		.strip_prefix(class)
+		.is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+}
+
 fn cubic_to_linear(cubic: f32) -> f32 {
 	cubic.powi(3)
 }
 fn linear_to_cubic(linear: f32) -> f32 {
 	linear.cbrt()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::is_class;
+
+	#[test]
+	fn virtual_devices_count_as_their_class() {
+		assert!(is_class("Audio/Source", "Audio/Source"));
+		assert!(is_class("Audio/Source/Virtual", "Audio/Source"));
+		assert!(is_class("Audio/Sink/Virtual", "Audio/Sink"));
+		assert!(!is_class("Audio/SourceX", "Audio/Source"));
+		assert!(!is_class("Audio/Sink", "Audio/Source"));
+		assert!(!is_class("Stream/Input/Audio", "Audio/Source"));
+	}
 }
