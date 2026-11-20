@@ -36,6 +36,8 @@ pub enum Command {
 	AdjustSourceVolume(String, f32),
 	/// Set mute on a specific source (by `node.name`). `None` toggles.
 	SetSourceMute(String, Option<bool>),
-	/// Make the source with this `node.name` the system default input.
+	/// Make the source with this `node.name` the system default input, by setting
+	/// the *configured* default (`default.configured.audio.source`) so the choice
+	/// is sticky rather than transient.
 	SetDefaultSource(String),
 }

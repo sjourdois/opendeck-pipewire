@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Input Device switches the input again** when a default input was once picked
+  in another tool: the key now sets the configured default, as Output Device does.
+
 ## [0.5.0]
 
 ### Added

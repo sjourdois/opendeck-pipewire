@@ -802,13 +802,15 @@ fn on_command(inner: &Rc<RefCell<Inner>>, cmd: Command) {
 			match b._metadata.as_ref() {
 				Some((metadata, _)) => {
 					let value = serde_json::json!({ "name": name }).to_string();
+					// The configured default, for the same reason as the sink: WirePlumber
+					// reverts a transient `default.audio.source` to the configured one.
 					metadata.set_property(
 						0,
-						"default.audio.source",
+						"default.configured.audio.source",
 						Some("Spa:String:JSON"),
 						Some(&value),
 					);
-					log::info!("set default source -> {name}");
+					log::info!("set configured default source -> {name}");
 				}
 				None => log::warn!("No 'default' metadata available; cannot switch source"),
 			}

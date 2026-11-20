@@ -101,6 +101,10 @@ Keys re-render **live** when a device's volume or mute changes outside the plugi
 (wpctl, pavucontrol, media keys, another app…), reflected through a PipeWire watch
 channel.
 
+**Output Device** and **Input Device** set the *configured* default, as
+`wpctl set-default` does, so WirePlumber keeps the choice instead of falling back
+to a device picked earlier in another tool.
+
 Volume changes are applied on the **device Route** for sinks with a hardware
 mixer (such as USB headsets) and on the **node Props** for software
 sinks — chosen automatically, including across live hardware-profile switches.
